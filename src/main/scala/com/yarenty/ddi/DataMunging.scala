@@ -6,6 +6,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
+import scala.collection.mutable
 import org.apache.spark.h2o._
 
 import hex.deeplearning.DeepLearning
@@ -102,16 +103,28 @@ object DataMunging extends SparkContextSupport {
     //  Use H2O to RDD transformation
     val orderTable = asRDD[Order](orderData)
     println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
+    //@TODO: create accumulators ? can they be map "1_1_1" => "timeslot_startDistrict_destinationDistrict? if not 700K of them???
+    //object VectorAccumulatorParam extends AccumulatorParam[Vector] ?
+
 
 
     //DISTRICT - simple parser
     val clusterData = sc.textFile(enforceLocalSparkFile("cluster_map"), 3).cache()
-    println(s"\n===> DISTRICTS via H2O#Frame#count: parsed"); //${clusterData.numRows()}\n")
+    println(s"\n===> DISTRICTS via H2O#Frame#count: ${clusterData.count()}\n")
 
-    val clusterTable = clusterData.map(_.split("\t")).map(row => DistrictParse(row)).filter(!_.isWrongRow())
-    val districtData = new H2OFrame(clusterTable)
-    println(s"\n===> DISTRICTS via H2O#Frame#count: ${districtData.numRows()}\n")
-    println(s"\n===> DISTRICTS in ${cluster_csv} via RDD#count call: ${clusterTable.count()}\n")
+    //@TODO: create as hashmap and broadcast it
+    val districtMap = sc.accumulableCollection(mutable.HashMap[String,Int]())
+    clusterData.map(_.split("\t")).map(row => {
+      val district = DistrictParse(row)
+      districtMap += (district.DistrictHash.get -> district.DistrictID.get)
+    })
+    println(s"\n===> DistrictMap:: ${districtMap} ")
+
+//    val districtData = new H2OFrame(clusterTable)
+//    println(s"\n===> DISTRICTS via H2O#Frame#count: ${districtData.numRows()}\n")
+//    println(s"\n===> DISTRICTS in ${cluster_csv} via RDD#count call: ${clusterTable.count()}\n")
+
+
 
 
 
@@ -203,11 +216,11 @@ object DataMunging extends SparkContextSupport {
     println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
 
     //  Use H2O to RDD transformation
-    val poiTable = asRDD(poiData)
-    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.count()}\n")
+    val poiTable = poiData.vecs()
+    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
 
 
-
+    //val dl =   new DeepLearning()
 
     //val numAs = logData.filter(line => line.contains("a")).count()
 
