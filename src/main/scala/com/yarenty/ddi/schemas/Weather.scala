@@ -1,7 +1,10 @@
 package com.yarenty.ddi.schemas
 
+import water.parser.{DefaultParserProviders, ParseSetup}
+
 /**
   * Weather schema definition.
+  *
   * @param Time
   * @param Weather  1-night, 8-sunny, 4-rain, etc...
   * @param Temperature
@@ -47,4 +50,35 @@ object WeatherParse extends Serializable {
       float(row(3)) // pollution
     )
   }
+}
+
+
+object WeatherCSVParser {
+
+  def get:ParseSetup = {
+    //    parseFiles
+    //      paths: ["/opt/data/season_1/training_data/weather_data/weather_data_2016-01-01"]
+    //      destination_frame: "weather_data_2016_01_01.hex"
+    //      parse_type: "CSV"
+    //      separator: 9
+    //      number_columns: 4
+    //      single_quotes: false
+    //      column_names: ["time","weather","temperature","pollution"]
+    //      column_types: ["String","Numeric","Numeric","Numeric"]
+    //      delete_on_done: true
+    //      check_header: -1
+    //      chunk_size: 4194304
+    val parseWeather: ParseSetup = new ParseSetup()
+    val weatherNames: Array[String] = Array("Time", "Weather", "Temperature", "Pollution")
+    val weatherTypes = ParseSetup.strToColumnTypes(Array("string", "int", "float", "float"))
+    parseWeather.setColumnNames(weatherNames)
+    parseWeather.setColumnTypes(weatherTypes)
+    parseWeather.setParseType(DefaultParserProviders.CSV_INFO)
+    parseWeather.setSeparator('\t')
+    parseWeather.setNumberColumns(6)
+    parseWeather.setSingleQuotes(false)
+    parseWeather.setCheckHeader(-1)
+    return  parseWeather
+  }
+
 }

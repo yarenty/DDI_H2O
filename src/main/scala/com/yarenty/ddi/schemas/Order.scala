@@ -1,7 +1,10 @@
 package com.yarenty.ddi.schemas
 
+import water.parser._
+
 /**
   * Order definition
+  *
   * @param OrderId
   * @param DriverId
   * @param PassengerId
@@ -62,4 +65,37 @@ object OrderParse extends Serializable {
 
     )
   }
+}
+
+
+
+//    parseFiles
+//      paths: ["/opt/data/season_1/training_data/order_data/order_data_2016-01-01"]
+//      destination_frame: "order_data_2016_01_01.hex"
+//      parse_type: "CSV"
+//      separator: 9
+//      number_columns: 7
+//      single_quotes: false
+//      column_names: ["oid","did","pid","stDH","deDH","price","time"]
+//      column_types: ["String","String","String","String","String","Numeric","String"]
+//      delete_on_done: true
+//      check_header: -1
+//      chunk_size: 930182
+
+object OrderCSVParser {
+
+  def get:ParseSetup = {
+    val parseOrders: ParseSetup = new ParseSetup()
+    val orderNames: Array[String] = Array("OrderId", "DriverId", "PassengerId", "StartDH", "DestDH", "Price", "Time")
+    val orderTypes = ParseSetup.strToColumnTypes(Array("string", "string", "string", "string", "string", "float", "string"))
+    parseOrders.setColumnNames(orderNames)
+    parseOrders.setColumnTypes(orderTypes)
+    parseOrders.setParseType(DefaultParserProviders.CSV_INFO)
+    parseOrders.setSeparator('\t')
+    parseOrders.setNumberColumns(7)
+    parseOrders.setSingleQuotes(false)
+    parseOrders.setCheckHeader(-1)
+    return parseOrders
+  }
+
 }

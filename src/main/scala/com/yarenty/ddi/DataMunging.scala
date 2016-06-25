@@ -20,6 +20,7 @@ import org.apache.spark.{SparkContext, SparkFiles}
 import water.support.SparkContextSupport
 
 import com.yarenty.ddi.schemas._
+
 /**
   * Created by yarenty on 23/06/2016.
   * (C)2015 SkyCorp Ltd.
@@ -72,32 +73,9 @@ object DataMunging extends SparkContextSupport {
 
     println(s"\n\n!!!!! FILES ADDED start CSV parser!!!!\n\n")
 
-    //    parseFiles
-    //      paths: ["/opt/data/season_1/training_data/order_data/order_data_2016-01-01"]
-    //      destination_frame: "order_data_2016_01_01.hex"
-    //      parse_type: "CSV"
-    //      separator: 9
-    //      number_columns: 7
-    //      single_quotes: false
-    //      column_names: ["oid","did","pid","stDH","deDH","price","time"]
-    //      column_types: ["String","String","String","String","String","Numeric","String"]
-    //      delete_on_done: true
-    //      check_header: -1
-    //      chunk_size: 930182
-    val parseOrders: ParseSetup = new ParseSetup()
-    val orderNames: Array[String] = Array("OrderId", "DriverId", "PassengerId", "StartDH", "DestDH", "Price", "Time")
-    val orderTypes = ParseSetup.strToColumnTypes(Array("string", "string", "string", "string", "string", "float", "string"))
-    parseOrders.setColumnNames(orderNames)
-    parseOrders.setColumnTypes(orderTypes)
-    parseOrders.setParseType(DefaultParserProviders.CSV_INFO)
-    parseOrders.setSeparator('\t')
-    parseOrders.setNumberColumns(7)
-    parseOrders.setSingleQuotes(false)
-    parseOrders.setCheckHeader(-1)
-
 
     // Use super-fast advanced H2O CSV parser !!!
-    val orderData = new H2OFrame(parseOrders, new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
+    val orderData = new H2OFrame(OrderCSVParser.get, new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
     println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
 
     //  Use H2O to RDD transformation
@@ -108,87 +86,45 @@ object DataMunging extends SparkContextSupport {
 
 
 
+
+
     //DISTRICT - simple parser
     val clusterData = sc.textFile(enforceLocalSparkFile("cluster_map"), 3).cache()
     println(s"\n===> DISTRICTS via H2O#Frame#count: ${clusterData.count()}\n")
 
     //@TODO: create as hashmap and broadcast it
-    val districtMap = sc.accumulableCollection(mutable.HashMap[String,Int]())
+    val districtMap = sc.accumulableCollection(mutable.HashMap[String, Int]())
     clusterData.map(_.split("\t")).map(row => {
-      val district = DistrictParse(row)
-      districtMap += (district.DistrictHash.get -> district.DistrictID.get)
-    })
-    println(s"\n===> DistrictMap:: ${districtMap} ")
+      //val district = DistrictParse(row) // really not need this !
+      val a = row(0)
+      val b = row(1).trim.toInt
+      println(s" adding: ${a} => ${b}")
+      districtMap += (a ->b)
+    }).count()   //force to execute
+    println(s"\n===> DistrictMap:: ${districtMap.value.size} ")
+    districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
 
-//    val districtData = new H2OFrame(clusterTable)
-//    println(s"\n===> DISTRICTS via H2O#Frame#count: ${districtData.numRows()}\n")
-//    println(s"\n===> DISTRICTS in ${cluster_csv} via RDD#count call: ${clusterTable.count()}\n")
+    //    val districtData = new H2OFrame(clusterTable)
+    //    println(s"\n===> DISTRICTS via H2O#Frame#count: ${districtData.numRows()}\n")
+    //    println(s"\n===> DISTRICTS in ${cluster_csv} via RDD#count call: ${clusterTable.count()}\n")
 
 
-
-
-
-
-
-//    parseFiles
-//      paths: ["/opt/data/season_1/training_data/traffic_data/traffic_data_2016-01-01"]
-//      destination_frame: "traffic_data_2016_01_01.hex"
-//      parse_type: "CSV"
-//      separator: 9
-//      number_columns: 6
-//      single_quotes: false
-//      column_names: ["DistrictHash","Traffic1","Traffic2","Traffic3","Traffic4","Time"]
-//      column_types: ["String","String","String","String","String","String"]
-//      delete_on_done: true
-//      check_header: -1
-//      chunk_size: 7220
-    val parseTraffic: ParseSetup = new ParseSetup()
-    val trafficNames: Array[String] = Array("DistrictHash","Traffic1","Traffic2","Traffic3","Traffic4","Time")
-    val trafficTypes = ParseSetup.strToColumnTypes(Array("string", "string", "string", "string", "string", "string"))
-    parseTraffic.setColumnNames(trafficNames)
-    parseTraffic.setColumnTypes(trafficTypes)
-    parseTraffic.setParseType(DefaultParserProviders.CSV_INFO)
-    parseTraffic.setSeparator('\t')
-    parseTraffic.setNumberColumns(6)
-    parseTraffic.setSingleQuotes(false)
-    parseTraffic.setCheckHeader(-1)
 
     // Use super-fast advanced H2O CSV parser !!!
-    val trafficData = new H2OFrame(parseTraffic, new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
+    val trafficData = new H2OFrame(TrafficCSVParser.get, new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
     println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
     //  Use H2O to RDD transformation
-    val trafficTable:RDD[Traffic] = asRDD[TrafficIN](trafficData).map(row => TrafficParse(row)).filter(!_.isWrongRow())
+    val trafficTable: RDD[Traffic] = asRDD[TrafficIN](trafficData).map(row => TrafficParse(row)).filter(!_.isWrongRow())
     //val trafficTable = asRDD[Traffic](trafficData)
     println(s"\n===> TRAFFIC in ${order_csv} via RDD#count call: ${trafficTable.count()}\n")
 
 
 
-//    parseFiles
-//      paths: ["/opt/data/season_1/training_data/weather_data/weather_data_2016-01-01"]
-//      destination_frame: "weather_data_2016_01_01.hex"
-//      parse_type: "CSV"
-//      separator: 9
-//      number_columns: 4
-//      single_quotes: false
-//      column_names: ["time","weather","temperature","pollution"]
-//      column_types: ["String","Numeric","Numeric","Numeric"]
-//      delete_on_done: true
-//      check_header: -1
-//      chunk_size: 4194304
-    val parseWeather: ParseSetup = new ParseSetup()
-    val weatherNames: Array[String] = Array("Time","Weather","Temperature","Pollution")
-    val weatherTypes = ParseSetup.strToColumnTypes(Array("string", "int", "float", "float"))
-    parseWeather.setColumnNames(weatherNames)
-    parseWeather.setColumnTypes(weatherTypes)
-    parseWeather.setParseType(DefaultParserProviders.CSV_INFO)
-    parseWeather.setSeparator('\t')
-    parseWeather.setNumberColumns(6)
-    parseWeather.setSingleQuotes(false)
-    parseWeather.setCheckHeader(-1)
+
 
     // Use super-fast advanced H2O CSV parser !!!
-    val weatherData = new H2OFrame(parseWeather, new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
+    val weatherData = new H2OFrame(WeatherCSVParser.get, new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
     println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
 
     //  Use H2O to RDD transformation
