@@ -40,3 +40,5 @@ class HashMapAccumulator extends AccumulatorParam[HashMap[Int, Int]] {
 }
 
 
+
+object HashMapAccumulator extends HashMapAccumulator
