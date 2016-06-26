@@ -6,7 +6,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
-import scala.collection.mutable
+import scala.collection.mutable.HashMap
 import org.apache.spark.h2o._
 
 import hex.deeplearning.DeepLearning
@@ -21,6 +21,7 @@ import water.support.SparkContextSupport
 
 import com.yarenty.ddi.schemas._
 
+import com.yarenty.ddi.utils._
 /**
   * Created by yarenty on 23/06/2016.
   * (C)2015 SkyCorp Ltd.
@@ -45,20 +46,42 @@ object DataMunging extends SparkContextSupport {
   val weather_csv = training_dir + "weather_data/weather_data_" + PROCESSED_DAY
 
 
-
-
+  /**
+    * Return index of time slice from date - 10 min period
+    * @param t
+    * @return
+    */
   def getTimeSlice(t: String):Int = {
-
-    return 0
+    val tt = t.split(" ")(1).split(":")
+    return ((tt(0).toInt * 60 * 60 +tt(1).toInt*60 +tt(2).toInt ) / (10*60))+1
   }
 
+  /**
+    * Create index based on
+    * @param t timeslice
+    * @param s start district
+    * @param d destination district
+    * @return
+    */
   def getIndex(t:Int,s:Int,d:Int): Int = {
       return t*10000 + s*100 + d
   }
 
+  /**
+    * Getting back - timeslice, start district, destination district - from index
+    * @param i  index
+    * @return
+    */
   def getBack(i:Int): (Int,Int,Int) = {
-      return (i/10000, i%100000, 1%100)
+      val i1 = i/10000
+      val i2 = (i - ( i1 * 10000)) / 100
+      val i3 = i - ( i1 * 10000) - i2*100
+      return (i1, i2, i3)
   }
+
+
+
+
 
   def main(args: Array[String]) {
     //val conf = new SparkConf().setAppName("DDI Data Munging")
@@ -98,7 +121,7 @@ object DataMunging extends SparkContextSupport {
     println(s"\n===> DISTRICTS via H2O#Frame#count: ${clusterData.count()}\n")
 
     //@TODO: create as hashmap and broadcast it
-    val districtMap = sc.accumulableCollection(mutable.HashMap[String, Int]())
+    val districtMap = sc.accumulableCollection(HashMap[String, Int]())
     clusterData.map(_.split("\t")).map(row => {
       //val district = DistrictParse(row) // really not need this !
       val a = row(0)
@@ -107,6 +130,7 @@ object DataMunging extends SparkContextSupport {
       districtMap += (a -> b)
     }).count() //force to execute
     println(s"\n===> DistrictMap:: ${districtMap.value.size} ")
+
     districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
 
 
@@ -120,7 +144,10 @@ object DataMunging extends SparkContextSupport {
     val orderTable = asRDD[Order](orderData)
     println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
     //@TODO: create accumulators ? can they be map "1_1_1" => "timeslot_startDistrict_destinationDistrict? if not 700K of them???
-    val orderByTimeslot = sc.accumulableCollection(mutable.HashMap[Int, Int]())  //timeslot -> no. orders
+    implicit def  h = new HashMapAccumulator()
+    val orderByTimeslot = sc.accumulableCollection(new HashMap[Int, Int]())  //timeslot -> no. orders
+
+
     orderTable.map(row => {
       //val district = DistrictParse(row) // really not need this !
       val timeslice = getTimeSlice(row.Time.get)

@@ -36,7 +36,7 @@ test in assembly := {}
 
 //-------------------
 //all for test
-libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.6" % "test"
 
 libraryDependencies += "junit" % "junit" % "4.12" % "test"
 
