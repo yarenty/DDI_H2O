@@ -34,6 +34,14 @@ libraryDependencies += "net.java.dev.jets3t" % "jets3t" % "0.6.1" % "provided" i
 //NO TEST when assembly
 test in assembly := {}
 
+//-------------------
+//all for test
+libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test"
+
+libraryDependencies += "junit" % "junit" % "4.12" % "test"
+
+libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.2" % "test"
+
 
 mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) => {
   case PathList("javax", "servlet", xs@_*) => MergeStrategy.first

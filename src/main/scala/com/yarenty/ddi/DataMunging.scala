@@ -28,6 +28,7 @@ import com.yarenty.ddi.schemas._
 object DataMunging extends SparkContextSupport {
 
 
+
   val PROCESSED_DAY = "2016-01-01"
   val data_dir = "/opt/data/season_1/"
   val training_dir = data_dir + "training_data/"
@@ -43,6 +44,21 @@ object DataMunging extends SparkContextSupport {
   val traffic_csv = training_dir + "traffic_data/traffic_data_" + PROCESSED_DAY
   val weather_csv = training_dir + "weather_data/weather_data_" + PROCESSED_DAY
 
+
+
+
+  def getTimeSlice(t: String):Int = {
+
+    return 0
+  }
+
+  def getIndex(t:Int,s:Int,d:Int): Int = {
+      return t*10000 + s*100 + d
+  }
+
+  def getBack(i:Int): (Int,Int,Int) = {
+      return (i/10000, i%100000, 1%100)
+  }
 
   def main(args: Array[String]) {
     //val conf = new SparkConf().setAppName("DDI Data Munging")
@@ -74,17 +90,6 @@ object DataMunging extends SparkContextSupport {
     println(s"\n\n!!!!! FILES ADDED start CSV parser!!!!\n\n")
 
 
-    // Use super-fast advanced H2O CSV parser !!!
-    val orderData = new H2OFrame(OrderCSVParser.get, new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
-    println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
-
-    //  Use H2O to RDD transformation
-    val orderTable = asRDD[Order](orderData)
-    println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
-    //@TODO: create accumulators ? can they be map "1_1_1" => "timeslot_startDistrict_destinationDistrict? if not 700K of them???
-    //object VectorAccumulatorParam extends AccumulatorParam[Vector] ?
-
-
 
 
 
@@ -99,15 +104,40 @@ object DataMunging extends SparkContextSupport {
       val a = row(0)
       val b = row(1).trim.toInt
       println(s" adding: ${a} => ${b}")
-      districtMap += (a ->b)
-    }).count()   //force to execute
+      districtMap += (a -> b)
+    }).count() //force to execute
     println(s"\n===> DistrictMap:: ${districtMap.value.size} ")
     districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
 
-    //    val districtData = new H2OFrame(clusterTable)
-    //    println(s"\n===> DISTRICTS via H2O#Frame#count: ${districtData.numRows()}\n")
-    //    println(s"\n===> DISTRICTS in ${cluster_csv} via RDD#count call: ${clusterTable.count()}\n")
 
+
+    // Use super-fast advanced H2O CSV parser !!!
+    val orderData = new H2OFrame(OrderCSVParser.get, new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
+    println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
+
+
+    //  Use H2O to RDD transformation
+    val orderTable = asRDD[Order](orderData)
+    println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
+    //@TODO: create accumulators ? can they be map "1_1_1" => "timeslot_startDistrict_destinationDistrict? if not 700K of them???
+    val orderByTimeslot = sc.accumulableCollection(mutable.HashMap[Int, Int]())  //timeslot -> no. orders
+    orderTable.map(row => {
+      //val district = DistrictParse(row) // really not need this !
+      val timeslice = getTimeSlice(row.Time.get)
+      val from = districtMap.value.get(row.StartDH.get)
+      val to = districtMap.value.get(row.DestDH.get)
+
+
+      val indx =  getIndex(timeslice,from.get,to.get)
+
+
+      //@TODO: need to overwrite add method!!
+      orderByTimeslot += (indx -> 1)  // how to update???
+
+    }).count() //force to execute
+
+    println(s"\n===> DistrictMap:: ${districtMap.value.size} ")
+    districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
 
 
     // Use super-fast advanced H2O CSV parser !!!
