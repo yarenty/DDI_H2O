@@ -1,23 +1,25 @@
 package com.yarenty.ddi
 
-import java.io.File
+import java.io.{PrintWriter, File}
 
 import org.apache.spark._
 import org.apache.spark.SparkContext._
+import water._
+import water.fvec._
 
 import scala.collection.mutable
-import scala.collection.mutable.{ListBuffer, HashMap}
+import scala.collection.mutable.{ArrayBuffer, ListBuffer, HashMap}
 import org.apache.spark.h2o._
 
 import hex.deeplearning.DeepLearning
 import hex.deeplearning.DeepLearningModel.DeepLearningParameters
-import water.parser._
+
+//import water.parser._
 
 //import org.apache.spark.h2o.{DoubleHolder, H2OContext, H2OFrame}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import water.support.SparkContextSupport
-
 import com.yarenty.ddi.schemas._
 
 import com.yarenty.ddi.utils._
@@ -29,16 +31,15 @@ import com.yarenty.ddi.utils._
 object DataMunging extends SparkContextSupport {
 
 
-  val PROCESSED_DAY = "2016-01-01"
+  val PROCESSED_DAY = "2016-01-02"
   val data_dir = "/opt/data/season_1/"
   val training_dir = data_dir + "training_data/"
   val test_dir = data_dir + "test_set_1/"
-  val output_training_dir = data_dir + "outtrain/"
-  val output_test_dir = data_dir + "outtest/"
+  val output_training_dir = data_dir + "outtrain/timeordergap"
+  val output_test_dir = data_dir + "outtest/timeorder"
 
 
   val order_csv = training_dir + "order_data/order_data_" + PROCESSED_DAY
-  //2016-01-01
   val cluster_csv = training_dir + "cluster_map/cluster_map"
   val poi_csv = training_dir + "poi_data/poi_data"
   val traffic_csv = training_dir + "traffic_data/traffic_data_" + PROCESSED_DAY
@@ -119,7 +120,7 @@ object DataMunging extends SparkContextSupport {
 
     // Use super-fast advanced H2O CSV parser !!!
     val orderData = new h2o.H2OFrame(OrderCSVParser.get,
-                            new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
+      new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
     println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
 
 
@@ -129,9 +130,31 @@ object DataMunging extends SparkContextSupport {
 
 
 
-    val orders: h2o.RDD[(Int, Int)] = orderTable.map(row => {
+    val orders: Map[Int, Int] = orderTable.map(row => {
       //val district = DistrictParse(row) // really not need this !
       val timeslice = getTimeSlice(row.Time.get)
+      var gap = row.DriverId.get
+      var from = disctrictMapBR.value.get(row.StartDH.get)
+      var to = disctrictMapBR.value.get(row.DestDH.get)
+
+      if (to == None) {
+        //println(s" destination not existing: ${row.DestDH} ")
+        to = Option(0)
+      }
+
+      if (from == None) {
+        from = Option(0)
+      }
+
+      val indx = getIndex(timeslice, from.get, to.get)
+      indx
+    }).groupBy(identity).mapValues(_.size).collect().toMap
+
+
+    val gaps: Map[Int, Int] = orderTable.map(row => {
+      //val district = DistrictParse(row) // really not need this !
+      val timeslice = getTimeSlice(row.Time.get)
+      var gap = row.DriverId.get
       var from = disctrictMapBR.value.get(row.StartDH.get)
       var to = disctrictMapBR.value.get(row.DestDH.get)
 
@@ -146,13 +169,41 @@ object DataMunging extends SparkContextSupport {
 
       val indx = getIndex(timeslice, from.get, to.get)
 
-      indx
-    }).groupBy(identity).mapValues(_.size)
+      if (gap != "NULL") {
+        0
+      } else {
+        indx
+      }
+    }).groupBy(identity).mapValues(_.size).collect().toMap
 
-    println(s"\n===> ORDERS LIST:: ${orders.count()} ")
+    println(s"\n===> ORDERS LIST:: ${orders} ")
 
     orders.take(20).foreach(println)
 
+
+
+
+    val headers = Array("id", "ts", "din", "dout", "no", "gap")
+    val myData = new h2o.H2OFrame(getData(
+      headers,
+      orders, gaps))
+    //    val key = Key.make("TimedOrders")
+
+    val v = DKV.put(myData)
+
+
+    println(s" AND MY DATA IS: ${myData.key} =>  ${myData.numCols()} / ${myData.numRows()}")
+
+    println(s"frame::${v}")
+
+
+    val csv = myData.toCSV(true, false)
+
+    val csv_writer = new PrintWriter(new File(output_training_dir + PROCESSED_DAY))
+    while (csv.available() > 0) {
+      csv_writer.write(csv.read.toChar)
+    }
+    csv_writer.close
 
 
 
@@ -161,23 +212,21 @@ object DataMunging extends SparkContextSupport {
 
     // Use super-fast advanced H2O CSV parser !!!
     val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
-                            new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
+      new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
     println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
     //  Use H2O to RDD transformation
     val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
-              .map(row => TrafficParse(row))
-              .filter(!_.isWrongRow())
+      .map(row => TrafficParse(row))
+      .filter(!_.isWrongRow())
     //val trafficTable = asRDD[Traffic](trafficData)
     println(s"\n===> TRAFFIC in ${order_csv} via RDD#count call: ${trafficTable.count()}\n")
 
 
 
-
-
     // Use super-fast advanced H2O CSV parser !!!
     val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
-                          new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
+      new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
     println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
 
     //  Use H2O to RDD transformation
@@ -232,6 +281,89 @@ object DataMunging extends SparkContextSupport {
     //val numAs = logData.filter(line => line.contains("a")).count()
 
     //// println("Lines with a: %s, Lines with b: %s".format(numAs))
+  }
+
+
+  def getData(headers: Array[String], orders: Map[Int, Int], gaps: Map[Int, Int]): Frame = {
+
+    val len = headers.length
+
+    val fs = new Array[Futures](len)
+    for (i <- 0 until len) {
+      fs(i) = new Futures()
+    }
+
+
+    val vecs = new Array[Vec](len)
+
+    val vid = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+    val vts = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+    val vdin = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+    val vdout = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+    val vno = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+    val vgap = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+
+
+    val cid = new NewChunk(vid, 0)
+    val cts = new NewChunk(vts, 0)
+    val cdin = new NewChunk(vdin, 0)
+    val cdout = new NewChunk(vdout, 0)
+    val cno = new NewChunk(vno, 0)
+    val cgap = new NewChunk(vgap, 0)
+
+    for (ts <- 1 to 144) {
+      for (din <- 1 to 66) {
+        for (dout <- 0 to 66) {
+
+          val idx = getIndex(ts, din, dout)
+          cid.addNum(idx)
+          cts.addNum(ts)
+          cdin.addNum(din)
+          cdout.addNum(dout)
+
+          if (orders.contains(idx)) {
+            cno.addNum(orders.get(idx).get)
+          }
+          else {
+            cno.addNum(0)
+          }
+
+          if (gaps.contains(idx)) {
+            cgap.addNum(gaps.get(idx).get)
+          }
+          else {
+            cgap.addNum(0)
+          }
+        }
+      }
+    }
+    cid.close(0, fs(0))
+    cts.close(0, fs(1))
+    cdin.close(0, fs(2))
+    cdout.close(0, fs(3))
+    cno.close(0, fs(4))
+    cgap.close(0, fs(5))
+
+    vecs(0) = vid.layout_and_close(fs(0))
+    vecs(1) = vts.layout_and_close(fs(1))
+    vecs(2) = vdin.layout_and_close(fs(2))
+    vecs(3) = vdout.layout_and_close(fs(3))
+    vecs(4) = vno.layout_and_close(fs(4))
+    vecs(5) = vgap.layout_and_close(fs(5))
+
+    for (i <- 0 until len) {
+      fs(i).blockForPending()
+    }
+
+
+    val key = Key.make("TimedOrders")
+
+    for (vec <- vecs) {
+      println(s"KEY:: ${vec._key}")
+      //DKV.prefetch(vec._key)
+    }
+    return new Frame(key, headers, vecs)
+
   }
 
 
