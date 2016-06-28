@@ -60,7 +60,7 @@ The command creates jar file `build/libs/ddi.jar` containing all necessary class
 Submit application to Spark cluster (in this case, local cluster is used):
 ```
 export MASTER='local-cluster[3,2,1024]'
-$SPARK_HOME/bin/spark-submit --class com.yarenty.ddi.DataMungingr build/libs/ddi.jar
+$SPARK_HOME/bin/spark-submit --class com.yarenty.ddi.DataMunging build/libs/ddi.jar
 ```
 
 

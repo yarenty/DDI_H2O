@@ -41,7 +41,9 @@ class TrafficIN(val DistrictHash: Option[String],
     sb.toString
   }
 
-  def isWrongRow(): Boolean = (0 until productArity).map(idx => productElement(idx)).forall(e => e == None)
+  def isWrongRow(): Boolean = (0 until productArity)
+    .map(idx => productElement(idx))
+    .forall(e => e == None)
 }
 
 /** A dummy csv parser for orders dataset. */
@@ -102,7 +104,9 @@ class Traffic(val DistrictHash: Option[String],
     sb.toString
   }
 
-  def isWrongRow(): Boolean = (0 until productArity).map(idx => productElement(idx)).forall(e => e == None)
+  def isWrongRow(): Boolean = (0 until productArity)
+    .map(idx => productElement(idx))
+    .forall(e => e == None)
 }
 
 
@@ -112,14 +116,10 @@ object TrafficParse extends Serializable {
   def apply(row: TrafficIN): Traffic = {
     import water.support.ParseSupport._
 
-    //println(s"\n ${row.Traffic1} => ")
-    //println(s"\n ${row.Traffic1.get} => ${row.Traffic1.toString} =>  ${row.Traffic1.toString.split(':')(1)}  =>")
     val traffic1 = Option(row.Traffic1.get.split(':')(1).toInt)
     val traffic2 = Option(row.Traffic2.get.split(':')(1).toInt)
     val traffic3 = Option(row.Traffic3.get.split(':')(1).toInt)
     val traffic4 = Option(row.Traffic4.get.split(':')(1).toInt)
-
-    //println(s"\n  => ${traffic1}")
 
     new Traffic(row.DistrictHash, // district
       traffic1, // t1
@@ -148,8 +148,10 @@ object TrafficCSVParser{
     //      check_header: -1
     //      chunk_size: 7220
     val parseTraffic: ParseSetup = new ParseSetup()
-    val trafficNames: Array[String] = Array("DistrictHash", "Traffic1", "Traffic2", "Traffic3", "Traffic4", "Time")
-    val trafficTypes = ParseSetup.strToColumnTypes(Array("string", "string", "string", "string", "string", "string"))
+    val trafficNames: Array[String] = Array(
+      "DistrictHash", "Traffic1", "Traffic2", "Traffic3", "Traffic4", "Time")
+    val trafficTypes = ParseSetup.strToColumnTypes(Array(
+      "string", "string", "string", "string", "string", "string"))
     parseTraffic.setColumnNames(trafficNames)
     parseTraffic.setColumnTypes(trafficTypes)
     parseTraffic.setParseType(DefaultParserProviders.CSV_INFO)

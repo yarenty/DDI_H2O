@@ -1,9 +1,3 @@
-/*
- * This is a simple build file for building Sparkling Water applications.
- *
- * For more details please follow README.md.
- */
-
 // Apply the java plugin to add support for Java
 apply plugin: 'scala'
 // Support idea and Eclipse IDEs

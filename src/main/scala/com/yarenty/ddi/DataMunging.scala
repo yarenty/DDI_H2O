@@ -118,7 +118,8 @@ object DataMunging extends SparkContextSupport {
 
 
     // Use super-fast advanced H2O CSV parser !!!
-    val orderData = new h2o.H2OFrame(OrderCSVParser.get, new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
+    val orderData = new h2o.H2OFrame(OrderCSVParser.get,
+                            new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
     println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
 
 
@@ -159,11 +160,14 @@ object DataMunging extends SparkContextSupport {
 
 
     // Use super-fast advanced H2O CSV parser !!!
-    val trafficData = new h2o.H2OFrame(TrafficCSVParser.get, new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
+    val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
+                            new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
     println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
     //  Use H2O to RDD transformation
-    val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData).map(row => TrafficParse(row)).filter(!_.isWrongRow())
+    val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
+              .map(row => TrafficParse(row))
+              .filter(!_.isWrongRow())
     //val trafficTable = asRDD[Traffic](trafficData)
     println(s"\n===> TRAFFIC in ${order_csv} via RDD#count call: ${trafficTable.count()}\n")
 
@@ -172,7 +176,8 @@ object DataMunging extends SparkContextSupport {
 
 
     // Use super-fast advanced H2O CSV parser !!!
-    val weatherData = new h2o.H2OFrame(WeatherCSVParser.get, new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
+    val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
+                          new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
     println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
 
     //  Use H2O to RDD transformation
@@ -189,8 +194,26 @@ object DataMunging extends SparkContextSupport {
     //      separator: 9
     //      number_columns: 139
     //      single_quotes: false
-    //      column_names: ["DistrictHash","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]
-    //      column_types: ["String","String","String","String","String","String","String","String","String","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","String","String","String","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","String","Enum","String","String","Enum","String","String","String","Enum","Enum","Enum","Enum","String","Enum","Enum","String","Enum","String","Enum","Enum","String","String","String","String","String","String","Enum","String","Enum","Enum","String","String","Enum","String","String","String","String","String","String","String","String","String","Enum","String","String","String","String","String","Enum","String","String","String","String","String","Enum","String","String","String","String","Enum","String","String","String","String","String","String","String","Enum","String","Enum","Enum","String","String","String","String","Enum","String","Enum","String","String","String","String","String","String","Enum","String","Enum","Enum","Enum","String","String","Enum","String","String","String","Enum","String","String","String","String","Enum","String","String","String","String"]
+    //      column_names: ["DistrictHash","","","","","","","","","","","","","","","","","",
+    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
+    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
+    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
+    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
+    // "","","","",""]
+    //      column_types: ["String","String","String","String","String","String","String",
+    // "String","String","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum",
+    // "Enum","Enum","String","String","String","Enum","Enum","Enum","Enum","Enum","Enum","Enum",
+    // "Enum","Enum","Enum","String","Enum","String","String","Enum","String","String","String",
+    // "Enum","Enum","Enum","Enum","String","Enum","Enum","String","Enum","String","Enum","Enum",
+    // "String","String","String","String","String","String","Enum","String","Enum","Enum",
+    // "String","String","Enum","String","String","String","String","String","String","String",
+    // "String","String","Enum","String","String","String","String","String","Enum","String",
+    // "String","String","String","String","Enum","String","String","String","String","Enum",
+    // "String","String","String","String","String","String","String","Enum","String","Enum",
+    // "Enum","String","String","String","String","Enum","String","Enum","String","String",
+    // "String","String","String","String","Enum","String","Enum","Enum","Enum","String",
+    // "String","Enum","String","String","String","Enum","String","String","String","String",
+    // "Enum","String","String","String","String"]
     //      delete_on_done: true
     //      check_header: -1
     //      chunk_size: 4194304

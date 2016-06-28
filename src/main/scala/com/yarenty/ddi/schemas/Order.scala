@@ -46,7 +46,9 @@ class Order(val OrderId: Option[String],
     sb.toString
   }
 
-  def isWrongRow(): Boolean = (0 until productArity).map(idx => productElement(idx)).forall(e => e == None)
+  def isWrongRow(): Boolean = (0 until productArity)
+    .map(idx => productElement(idx))
+    .forall(e => e == None)
 }
 
 /** A dummy csv parser for orders dataset. */
@@ -86,8 +88,10 @@ object OrderCSVParser {
 
   def get:ParseSetup = {
     val parseOrders: ParseSetup = new ParseSetup()
-    val orderNames: Array[String] = Array("OrderId", "DriverId", "PassengerId", "StartDH", "DestDH", "Price", "Time")
-    val orderTypes = ParseSetup.strToColumnTypes(Array("string", "string", "string", "string", "string", "float", "string"))
+    val orderNames: Array[String] = Array(
+      "OrderId", "DriverId", "PassengerId", "StartDH", "DestDH", "Price", "Time")
+    val orderTypes = ParseSetup.strToColumnTypes(Array(
+      "string", "string", "string", "string", "string", "float", "string"))
     parseOrders.setColumnNames(orderNames)
     parseOrders.setColumnTypes(orderTypes)
     parseOrders.setParseType(DefaultParserProviders.CSV_INFO)

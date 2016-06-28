@@ -1,20 +1,16 @@
 package com.yarenty.ddi.math
 
-
 import org.apache.commons.math.MathException
 import org.apache.commons.math.distribution.FDistribution
 import org.apache.commons.math.distribution.FDistributionImpl
 import org.apache.commons.math.stat.StatUtils
 import org.apache.commons.math.stat.regression.OLSMultipleLinearRegression
 
-
 /**
   * Based on Sergey Edunov java solution.
   * Created by yarenty on 27/06/2016.
   * (C)2015 SkyCorp Ltd.
   */
-
-
 class GrangerTestResult(fStat: Double, r3: Double, pValue: Double) {
 }
 

@@ -13,20 +13,25 @@ case class Complex(re: Double, im: Double = 0.0) {
 
   def -(x: Complex): Complex = Complex((this.re - x.re), (this.im - x.im))
 
-  def *(x: Complex): Complex = Complex(this.re * x.re - this.im * x.im, this.re * x.im + this.im * x.re)
+  def *(x: Complex): Complex = Complex(this.re * x.re - this.im * x.im,
+    this.re * x.im + this.im * x.re)
 }
 
 class FFT {
   def transformReal(input: IndexedSeq[Double]) = {
     val data = padder(input.map(i => Complex(i)).toList)
     val outComplex = fft(data)
-    outComplex.map(c => math.sqrt((c.re * c.re) + (c.im * c.im))).take((data.length / 2) + 1).toIndexedSeq // Magnitude Output
+    outComplex.map(c => math.sqrt((c.re * c.re) + (c.im * c.im)))
+      .take((data.length / 2) + 1)
+      .toIndexedSeq // Magnitude Output
   }
 
   def powerSpectrum(input: IndexedSeq[Double]) = {
     val data = padder(input.map(i => Complex(i)).toList)
     val outComplex = fft(data)
-    val out = outComplex.map(c => math.sqrt((c.re * c.re) + (c.im * c.im))).take((data.length / 2) + 1).toIndexedSeq
+    val out = outComplex.map(c => math.sqrt((c.re * c.re) + (c.im * c.im)))
+      .take((data.length / 2) + 1)
+      .toIndexedSeq
     out.map(i => (i * i) / data.length) // Power Spectral Density Output
   }
 
