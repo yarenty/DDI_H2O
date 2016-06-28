@@ -135,12 +135,11 @@ object DataMunging extends SparkContextSupport {
       var to = disctrictMapBR.value.get(row.DestDH.get)
 
       if (to == None) {
-        println(s" destination not existing: ${row.DestDH} ")
+        //println(s" destination not existing: ${row.DestDH} ")
         to = Option(0)
       }
 
       if (from == None) {
-        println(s" start not existing: ${row.StartDH} ")
         from = Option(0)
       }
 
@@ -152,7 +151,6 @@ object DataMunging extends SparkContextSupport {
     println(s"\n===> ORDERS LIST:: ${orders.count()} ")
 
     orders.take(20).foreach(println)
-
 
 
 
@@ -225,7 +223,6 @@ object DataMunging extends SparkContextSupport {
       //val district = DistrictParse(row) // really not need this !
       val a = row(0)
       val b = row(1).trim.toInt
-      println(s" adding: ${a} => ${b}")
       districtMap += (a -> b)
     }).count() //force to execute
     println(s"\n===> DistrictMap:: ${districtMap.value.size} ")

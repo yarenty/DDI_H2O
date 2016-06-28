@@ -112,8 +112,8 @@ object TrafficParse extends Serializable {
   def apply(row: TrafficIN): Traffic = {
     import water.support.ParseSupport._
 
-    println(s"\n ${row.Traffic1} => ")
-    println(s"\n ${row.Traffic1.get} => ${row.Traffic1.toString} =>  ${row.Traffic1.toString.split(':')(1)}  =>")
+    //println(s"\n ${row.Traffic1} => ")
+    //println(s"\n ${row.Traffic1.get} => ${row.Traffic1.toString} =>  ${row.Traffic1.toString.split(':')(1)}  =>")
     val traffic1 = Option(row.Traffic1.get.split(':')(1).toInt)
     val traffic2 = Option(row.Traffic2.get.split(':')(1).toInt)
     val traffic3 = Option(row.Traffic3.get.split(':')(1).toInt)
