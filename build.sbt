@@ -14,7 +14,7 @@ scalaVersion := "2.10.6"     // h2o is not ported yet to scala 2.11
 ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
 
 jarName in assembly := "ddi.jar"
-mainClass in assembly := Some("com.yarenty.ddi.DataMunging")
+mainClass in assembly := Some("com.yarenty.ddi.MLProcessor")
 // no scala classes in assembly
 assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)
 

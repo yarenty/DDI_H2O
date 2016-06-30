@@ -31,19 +31,474 @@ import com.yarenty.ddi.utils._
 object DataMunging extends SparkContextSupport {
 
 
-  val PROCESSED_DAY = "2016-01-02"
+  var PROCESSED_DAY = "2016-01-01"
   val data_dir = "/opt/data/season_1/"
-  val training_dir = data_dir + "training_data/"
-  val test_dir = data_dir + "test_set_1/"
-  val output_training_dir = data_dir + "outtrain/timeordergap"
-  val output_test_dir = data_dir + "outtest/timeorder"
+//  val training_dir = data_dir + "training_data/"
+  val training_dir = data_dir + "test_set_1/"
 
+//  val output_dir = data_dir + "outtest/sm_"
+  val output_dir = data_dir + "outtrain/sm_"
 
-  val order_csv = training_dir + "order_data/order_data_" + PROCESSED_DAY
+  val order_csv = training_dir + "order_data/order_data_"
+
   val cluster_csv = training_dir + "cluster_map/cluster_map"
   val poi_csv = training_dir + "poi_data/poi_data"
-  val traffic_csv = training_dir + "traffic_data/traffic_data_" + PROCESSED_DAY
-  val weather_csv = training_dir + "weather_data/weather_data_" + PROCESSED_DAY
+  val traffic_csv = training_dir + "traffic_data/traffic_data_"
+  val weather_csv = training_dir + "weather_data/weather_data_"
+
+
+  def mergePOI(poi: Map[Int, Map[String, Int]]): Map[Int, Map[String, Int]] = {
+    poi.map( row => {
+      val idx = row._1
+      val old = row._2
+      var now: Map[String, Int] = Map[String, Int]()
+
+
+      for(i <- 1 to 25 ) {
+        var tmp = 0
+        val im = s"${i}"
+        println(im)
+        if (old.contains(im)) {
+           println("hasit")
+          tmp += old.get(im).get
+        }
+        for (j <- 1 to 20){
+          val id = s"${i}#${j}"
+          if (old.contains(id)) {
+            tmp += old.get(id).get
+          }
+        }
+        now += (s"${i}" -> tmp)
+      }
+
+      idx -> now
+    })
+  }
+
+  def process(sc: SparkContext, h2oContext: H2OContext) {
+
+    import h2oContext._
+    import h2oContext.implicits._
+
+    println(s"\n\n LETS MUNG\n")
+
+    addFiles(sc,
+      absPath(cluster_csv),
+      absPath(poi_csv)
+    )
+
+
+
+
+
+
+    println(s"\n\n!!!!! FILES ADDED start CSV parser!!!!\n\n")
+
+    // get districts and now broadcast them
+    val disctrictMapBR = sc.broadcast(processDistricts(sc))
+
+
+    // Use super-fast advanced H2O CSV parser !!!
+    val poiData = new h2o.H2OFrame(new File(SparkFiles.get("poi_data")))
+    println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
+
+    //  Use H2O to RDD transformation
+    val poiTable = poiData.vecs()
+    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
+
+
+    val poi: Map[Int, Map[String, Int]] = asRDD[POI](poiData).map(row => {
+
+      val iter = row.productIterator
+      val district: String = iter.next match {
+        case None => ""
+        case Some(value) => value.toString // value is of type String
+      }
+
+      //      println(s"district: ${district}")
+      val din: Int = disctrictMapBR.value.get(district).get
+      var m: Map[String, Int] = Map[String, Int]()
+      while (iter.hasNext) {
+
+        val col = iter.next match {
+          case None => ""
+          case Some(value) => value.toString // value is of type String
+        }
+
+        if (!col.isEmpty && col != "") {
+          //          println(s" COL: ${col}")
+          val v = col.split(":")
+          m += (v(0) -> v(1).toInt)
+        }
+      }
+      din -> m
+    }).collect().toMap
+
+
+    val mergedPOI: Map[Int, Map[String, Int]] =  mergePOI(poi)
+
+
+    for (m <- mergedPOI) {
+      println(m)
+    }
+
+
+//    for (i <- 1 to 21) {
+//
+//      PROCESSED_DAY = "2016-01-" + "%02d".format(i)
+
+    val pd = Array("2016-01-22_test","2016-01-24_test","2016-01-26_test","2016-01-28_test","2016-01-30_test")
+
+    for (p <- pd) {
+      PROCESSED_DAY = p
+
+      println(s"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\nSTART PROCESSING : ${PROCESSED_DAY}")
+
+      addFiles(sc,
+        absPath(order_csv + PROCESSED_DAY),
+        absPath(traffic_csv + PROCESSED_DAY),
+        absPath(weather_csv + PROCESSED_DAY)
+      )
+
+
+
+
+      // Use super-fast advanced H2O CSV parser !!!
+      val orderData = new h2o.H2OFrame(OrderCSVParser.get,
+        new File(SparkFiles.get("order_data_" + PROCESSED_DAY))) //+"_test"
+      println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
+
+      //  Use H2O to RDD transformation
+      val orderTable = asRDD[Order](orderData)
+      println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
+
+
+
+
+      val orders: Map[Int, Int] = orderTable.map(row => {
+        val timeslice = getTimeSlice(row.Time.get)
+        var from = disctrictMapBR.value.get(row.StartDH.get)
+        var to = disctrictMapBR.value.get(row.DestDH.get)
+
+        if (to == None) {
+          //println(s" destination not existing: ${row.DestDH} ")
+          to = Option(0)
+        }
+
+        if (from == None) {
+          from = Option(0)
+        }
+
+        val indx = getIndex(timeslice, from.get, to.get)
+        indx
+      }).groupBy(identity).mapValues(_.size).collect().toMap
+
+
+
+      val gaps: Map[Int, Int] = orderTable.map(row => {
+        val timeslice = getTimeSlice(row.Time.get)
+        val gap = row.DriverId.get
+        var from = disctrictMapBR.value.get(row.StartDH.get)
+        var to = disctrictMapBR.value.get(row.DestDH.get)
+
+        if (to == None) {
+          //println(s" destination not existing: ${row.DestDH} ")
+          to = Option(0)
+        }
+
+        if (from == None) {
+          from = Option(0)
+        }
+
+        val indx = getIndex(timeslice, from.get, to.get)
+
+        if (gap != "NULL") {
+          0
+        } else {
+          indx
+        }
+      }).groupBy(identity).mapValues(_.size).collect().toMap
+
+
+
+      println(s"\n===> ALL ORDERS :: ${orders.size} ")
+      orders.take(10).foreach(println)
+      println(s"\n===> GAP ORDERS :: ${gaps.size} ")
+      gaps.take(10).foreach(println)
+
+
+
+      // Use super-fast advanced H2O CSV parser !!!
+      val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
+        new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY))) // +"_test"
+      println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
+
+      //  Use H2O to RDD transformation
+      val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
+        .map(row => TrafficParse(row))
+        .filter(!_.isWrongRow())
+      //val trafficTable = asRDD[Traffic](trafficData)
+      println(s"\n===> TRAFFIC in ${order_csv} via RDD#count call: ${trafficTable.count()}\n")
+
+
+
+
+      var traffic: Map[Int, Tuple4[Int, Int, Int, Int]] = trafficTable.map(row => {
+        val ts = getTimeSlice(row.Time.get)
+        if (ts < 1) println(s" WRONG TIME: ${row.Time} ")
+        val din = disctrictMapBR.value.get(row.DistrictHash.get).get
+        val t1 = row.Traffic1.get
+        val t2 = row.Traffic2.get
+        val t3 = row.Traffic2.get
+        val t4 = row.Traffic2.get
+        (ts * 100 + din) ->(t1, t2, t3, t4)
+      }).collect().toMap
+
+      println(s" TRAFFIC MAP SIZE: ${traffic.size}")
+
+      var working: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
+      //fill traffic
+      for (din <- 1 to 66) {
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            working = traffic.get(idx).get
+          }
+        }
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            working = traffic.get(idx).get
+          } else {
+            traffic += idx -> working
+          }
+        }
+      }
+      println(s" TRAFFIC MAP SIZE: ${traffic.size}")
+
+
+
+
+
+      // Use super-fast advanced H2O CSV parser !!!
+      val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
+        new File(SparkFiles.get("weather_data_" + PROCESSED_DAY))) //+"_test"
+      println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
+
+      //  Use H2O to RDD transformation
+      val weatherTable: h2o.RDD[Weather] = asRDD[WeatherIN](weatherData)
+        .map(row => WeatherParse(row)).filter(!_.isWrongRow)
+
+      println(s"\n===> WEATHER in ${order_csv} via RDD#count call: ${weatherTable.count()}\n")
+
+
+      var weather: Map[Int, Tuple3[Int, Float, Float]] = weatherTable.map(row => {
+        row.ts ->(row.Weather.get, row.Temperature.get, row.Pollution.get)
+      }).collect().toMap
+
+      var workingw: Tuple3[Int, Float, Float] = (0, 0, 0)
+      //fill traffic
+
+      for (i <- 1 to 144) {
+        if (weather.contains(i)) {
+          workingw = weather.get(i).get
+        }
+      }
+      for (i <- 1 to 144) {
+        if (weather.contains(i)) {
+          workingw = weather.get(i).get
+        } else {
+          weather += i -> workingw
+        }
+      }
+
+      println(s" TRAFFIC MAP SIZE: ${weather.size}")
+
+
+
+//      "1", "1#1", "1#2", "1#3", "1#4", "1#5", "1#6", "1#7", "1#8", "1#9", "1#10", "1#11",
+//      "2#1", "2#2", "2#3", "2#4", "2#5", "2#6", "2#7", "2#8", "2#9", "2#10", "2#11", "2#12", "2#13",
+//      "3", "3#1", "3#2", "3#3", "3#4", "3#5",
+//      "4", "4#1", "4#2", "4#3", "4#4", "4#5", "4#6", "4#7", "4#8", "4#9", "4#10", "4#11", "4#12", "4#13", "4#14", "4#15", "4#16", "4#17", "4#18",
+//      "5", "5#1", "5#2", "5#3", "5#4",
+//      "6", "6#1", "6#2", "6#3", "6#4",
+//      "7", "7#1", "7#2", "7#3",
+//      "8", "8#1", "8#2", "8#3", "8#4", "8#5",
+//      "10#1",
+//      "11", "11#1", "11#2", "11#3", "11#4", "11#5", "11#6", "11#7", "11#8",
+//      "12",
+//      "13#1", "13#3", "13#4", "13#5", "13#6", "13#8",
+//      "14", "14#1", "14#2", "14#3", "14#4", "14#5", "14#6", "14#7", "14#8", "14#9", "14#10",
+//      "15", "15#1", "15#2", "15#3", "15#4", "15#5", "15#6", "15#7", "15#8",
+//      "16", "16#1", "16#2", "16#3", "16#4", "16#5", "16#6", "16#7", "16#8", "16#9", "16#10", "16#11", "16#12",
+//      "17", "17#1", "17#2", "17#3", "17#4", "17#5",
+//      "18",
+//      "19", "19#1", "19#2", "19#3", "19#4",
+//      "20", "20#1", "20#2", "20#3", "20#4", "20#5", "20#6", "20#7", "20#8", "20#9",
+//      "21#1", "21#2", "21#4",
+//      "22", "22#1", "22#2", "22#3", "22#4", "22#5", "22#6",
+//      "23", "23#1", "23#2", "23#3", "23#4", "23#5", "23#6",
+//      "24", "24#1", "24#2", "24#3",
+//      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
+
+
+
+      val headers = Array("id", "timeslice", "districtID", "destDistrict", "demand", "gap",
+        "traffic1", "traffic2", "traffic3", "traffic4",
+        "weather", "temp", "pollution",
+        "1","2","3","4","5","6","7","8","10",
+        "11","12","13","14","15","16","17","18","19","20",
+        "21","22","23","24","25"
+      )
+      val types = Array(Vec.T_NUM, Vec.T_CAT, Vec.T_CAT, Vec.T_CAT, Vec.T_NUM, Vec.T_NUM,
+        Vec.T_NUM, Vec.T_NUM, Vec.T_NUM, Vec.T_NUM,
+        Vec.T_CAT, Vec.T_NUM, Vec.T_NUM,
+        Vec.T_NUM)
+
+      val myData = new h2o.H2OFrame(getData(headers, types,
+        orders,
+        gaps,
+        traffic,
+        weather,
+        mergedPOI))   //poi
+
+      val v = DKV.put(myData)
+
+      println(s" AND MY DATA IS: ${myData.key} =>  ${myData.numCols()} / ${myData.numRows()}")
+      println(s"frame::${v}")
+
+
+      val csv = myData.toCSV(true, false)
+
+      val csv_writer = new PrintWriter(new File(output_dir + PROCESSED_DAY))
+      while (csv.available() > 0) {
+        csv_writer.write(csv.read.toChar)
+      }
+      csv_writer.close
+
+      println("!!!!!!!!!!!!!!!!!!!!\n!!!!!!OUTPUT CREATED!!!\n!!!!!!!!!!!!!!")
+
+
+      //clean
+      myData.delete()
+      trafficTable.delete()
+      trafficData.delete()
+      weatherTable.delete()
+      weatherData.delete()
+      orderTable.delete()
+      orderData.delete()
+
+      println("... and cleaned")
+    }
+
+
+  }
+
+
+  def getData(headers: Array[String], types: Array[Byte],
+              orders: Map[Int, Int],
+              gaps: Map[Int, Int],
+              traffic: Map[Int, Tuple4[Int, Int, Int, Int]],
+              weather: Map[Int, Tuple3[Int, Float, Float]],
+              poi: Map[Int, Map[String, Int]]): Frame = {
+
+    val len = headers.length
+
+    val fs = new Array[Futures](len)
+    val av = new Array[AppendableVec](len)
+    val chunks = new Array[NewChunk](len)
+    val vecs = new Array[Vec](len)
+
+
+    for (i <- 0 until len) {
+      fs(i) = new Futures()
+      av(i) = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+      chunks(i) = new NewChunk(av(i), 0)
+    }
+
+    for (ts <- 1 to 144) {
+      for (din <- 1 to 66) {
+        for (dout <- 0 to 66) {
+          val idx = getIndex(ts, din, dout)
+          chunks(0).addNum(idx)
+          chunks(1).addNum(ts)
+          chunks(2).addNum(din)
+          if (dout == 0) {
+            chunks(3).addNA()
+          } else {
+            chunks(3).addNum(dout)
+          }
+
+          if (orders.contains(idx)) {
+            chunks(4).addNum(orders.get(idx).get)
+          }
+          else {
+            chunks(4).addNum(0)
+          }
+          if (gaps.contains(idx)) {
+            chunks(5).addNum(gaps.get(idx).get)
+          }
+          else {
+            chunks(5).addNum(0)
+          }
+
+          var tidx = ts * 100 + din
+          if (traffic.contains(tidx)) {
+            chunks(6).addNum(traffic.get(tidx).get._1)
+            chunks(7).addNum(traffic.get(tidx).get._2)
+            chunks(8).addNum(traffic.get(tidx).get._3)
+            chunks(9).addNum(traffic.get(tidx).get._4)
+          }
+          else {
+            chunks(6).addNA()
+            chunks(7).addNA()
+            chunks(8).addNA()
+            chunks(9).addNA()
+          }
+
+          if (weather.contains(ts)) {
+            chunks(10).addNum(weather.get(ts).get._1)
+            chunks(11).addNum(weather.get(ts).get._1)
+            chunks(12).addNum(weather.get(ts).get._1)
+          } else {
+            chunks(10).addNA()
+            chunks(11).addNA()
+            chunks(12).addNA()
+          }
+
+          for (pp <- 13 until len) {
+
+            if (poi.contains(din)) {
+              val m = poi.get(din).get
+
+              if (m.contains(headers(pp))) {
+                chunks(pp).addNum(m.get(headers(pp)).get)
+              }
+              else {
+                chunks(pp).addNum(0)
+              }
+            }
+            else {
+              chunks(pp).addNA()
+
+            }
+          }
+
+
+        }
+      }
+    }
+
+    for (i <- 0 until len) {
+      chunks(i).close(0, fs(i))
+      vecs(i) = av(i).layout_and_close(fs(i))
+      fs(i).blockForPending()
+    }
+
+    val key = Key.make("TimedOrders")
+    return new Frame(key, headers, vecs)
+
+  }
 
 
   /**
@@ -83,305 +538,18 @@ object DataMunging extends SparkContextSupport {
   }
 
 
-  def main(args: Array[String]) {
-    //val conf = new SparkConf().setAppName("DDI Data Munging")
-
-    val conf = configure("H2O: DDI Data Munging")
-    val sc = new SparkContext(conf)
-
-    println(s"\n\n CONTEXT is HERE !!!!!!\n")
-
-    // val h2oContext = H2OContext.getOrCreate(sc)
-    val h2oContext = new H2OContext(sc).start()
-
-
-    import h2oContext._
-    import h2oContext.implicits._
-
-
-    println(s"\n\n H2O CONTEXT is TOO !!!!!!\n")
-
-
-    addFiles(sc,
-      absPath(order_csv),
-      absPath(cluster_csv),
-      absPath(poi_csv),
-      absPath(traffic_csv),
-      absPath(weather_csv)
-    )
-
-    println(s"\n\n!!!!! FILES ADDED start CSV parser!!!!\n\n")
-
-
-
-    // get districts and now broadcast them
-    val disctrictMapBR = sc.broadcast(processDistricts(sc))
-
-
-    // Use super-fast advanced H2O CSV parser !!!
-    val orderData = new h2o.H2OFrame(OrderCSVParser.get,
-      new File(SparkFiles.get("order_data_" + PROCESSED_DAY)))
-    println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
-
-
-    //  Use H2O to RDD transformation
-    val orderTable = asRDD[Order](orderData)
-    println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
-
-
-
-    val orders: Map[Int, Int] = orderTable.map(row => {
-      //val district = DistrictParse(row) // really not need this !
-      val timeslice = getTimeSlice(row.Time.get)
-      var gap = row.DriverId.get
-      var from = disctrictMapBR.value.get(row.StartDH.get)
-      var to = disctrictMapBR.value.get(row.DestDH.get)
-
-      if (to == None) {
-        //println(s" destination not existing: ${row.DestDH} ")
-        to = Option(0)
-      }
-
-      if (from == None) {
-        from = Option(0)
-      }
-
-      val indx = getIndex(timeslice, from.get, to.get)
-      indx
-    }).groupBy(identity).mapValues(_.size).collect().toMap
-
-
-    val gaps: Map[Int, Int] = orderTable.map(row => {
-      //val district = DistrictParse(row) // really not need this !
-      val timeslice = getTimeSlice(row.Time.get)
-      var gap = row.DriverId.get
-      var from = disctrictMapBR.value.get(row.StartDH.get)
-      var to = disctrictMapBR.value.get(row.DestDH.get)
-
-      if (to == None) {
-        //println(s" destination not existing: ${row.DestDH} ")
-        to = Option(0)
-      }
-
-      if (from == None) {
-        from = Option(0)
-      }
-
-      val indx = getIndex(timeslice, from.get, to.get)
-
-      if (gap != "NULL") {
-        0
-      } else {
-        indx
-      }
-    }).groupBy(identity).mapValues(_.size).collect().toMap
-
-    println(s"\n===> ORDERS LIST:: ${orders} ")
-
-    orders.take(20).foreach(println)
-
-
-
-
-    val headers = Array("id", "ts", "din", "dout", "no", "gap")
-    val myData = new h2o.H2OFrame(getData(
-      headers,
-      orders, gaps))
-    //    val key = Key.make("TimedOrders")
-
-    val v = DKV.put(myData)
-
-
-    println(s" AND MY DATA IS: ${myData.key} =>  ${myData.numCols()} / ${myData.numRows()}")
-
-    println(s"frame::${v}")
-
-
-    val csv = myData.toCSV(true, false)
-
-    val csv_writer = new PrintWriter(new File(output_training_dir + PROCESSED_DAY))
-    while (csv.available() > 0) {
-      csv_writer.write(csv.read.toChar)
-    }
-    csv_writer.close
-
-
-
-    //@TODO and now get list sorted - maybe groupby?
-
-
-    // Use super-fast advanced H2O CSV parser !!!
-    val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
-      new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))
-    println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
-
-    //  Use H2O to RDD transformation
-    val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
-      .map(row => TrafficParse(row))
-      .filter(!_.isWrongRow())
-    //val trafficTable = asRDD[Traffic](trafficData)
-    println(s"\n===> TRAFFIC in ${order_csv} via RDD#count call: ${trafficTable.count()}\n")
-
-
-
-    // Use super-fast advanced H2O CSV parser !!!
-    val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
-      new File(SparkFiles.get("weather_data_" + PROCESSED_DAY)))
-    println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
-
-    //  Use H2O to RDD transformation
-    val weatherTable = asRDD[Weather](weatherData)
-    println(s"\n===> WEATHER in ${order_csv} via RDD#count call: ${weatherTable.count()}\n")
-
-
-
-
-    //    parseFiles
-    //      paths: ["/opt/data/season_1/training_data/poi_data/poi_data"]
-    //      destination_frame: "poi_data.hex"
-    //      parse_type: "CSV"
-    //      separator: 9
-    //      number_columns: 139
-    //      single_quotes: false
-    //      column_names: ["DistrictHash","","","","","","","","","","","","","","","","","",
-    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
-    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
-    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
-    // "","","","","","","","","","","","","","","","","","","","","","","","","","","","","",
-    // "","","","",""]
-    //      column_types: ["String","String","String","String","String","String","String",
-    // "String","String","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum","Enum",
-    // "Enum","Enum","String","String","String","Enum","Enum","Enum","Enum","Enum","Enum","Enum",
-    // "Enum","Enum","Enum","String","Enum","String","String","Enum","String","String","String",
-    // "Enum","Enum","Enum","Enum","String","Enum","Enum","String","Enum","String","Enum","Enum",
-    // "String","String","String","String","String","String","Enum","String","Enum","Enum",
-    // "String","String","Enum","String","String","String","String","String","String","String",
-    // "String","String","Enum","String","String","String","String","String","Enum","String",
-    // "String","String","String","String","Enum","String","String","String","String","Enum",
-    // "String","String","String","String","String","String","String","Enum","String","Enum",
-    // "Enum","String","String","String","String","Enum","String","Enum","String","String",
-    // "String","String","String","String","Enum","String","Enum","Enum","Enum","String",
-    // "String","Enum","String","String","String","Enum","String","String","String","String",
-    // "Enum","String","String","String","String"]
-    //      delete_on_done: true
-    //      check_header: -1
-    //      chunk_size: 4194304
-
-    // Use super-fast advanced H2O CSV parser !!!
-    val poiData = new h2o.H2OFrame(new File(SparkFiles.get("poi_data")))
-    println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
-
-    //  Use H2O to RDD transformation
-    val poiTable = poiData.vecs()
-    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
-
-
-    //val dl =   new DeepLearning()
-
-    //val numAs = logData.filter(line => line.contains("a")).count()
-
-    //// println("Lines with a: %s, Lines with b: %s".format(numAs))
-  }
-
-
-  def getData(headers: Array[String], orders: Map[Int, Int], gaps: Map[Int, Int]): Frame = {
-
-    val len = headers.length
-
-    val fs = new Array[Futures](len)
-    for (i <- 0 until len) {
-      fs(i) = new Futures()
-    }
-
-
-    val vecs = new Array[Vec](len)
-
-    val vid = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-    val vts = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-    val vdin = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-    val vdout = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-    val vno = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-    val vgap = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-
-
-    val cid = new NewChunk(vid, 0)
-    val cts = new NewChunk(vts, 0)
-    val cdin = new NewChunk(vdin, 0)
-    val cdout = new NewChunk(vdout, 0)
-    val cno = new NewChunk(vno, 0)
-    val cgap = new NewChunk(vgap, 0)
-
-    for (ts <- 1 to 144) {
-      for (din <- 1 to 66) {
-        for (dout <- 0 to 66) {
-
-          val idx = getIndex(ts, din, dout)
-          cid.addNum(idx)
-          cts.addNum(ts)
-          cdin.addNum(din)
-          cdout.addNum(dout)
-
-          if (orders.contains(idx)) {
-            cno.addNum(orders.get(idx).get)
-          }
-          else {
-            cno.addNum(0)
-          }
-
-          if (gaps.contains(idx)) {
-            cgap.addNum(gaps.get(idx).get)
-          }
-          else {
-            cgap.addNum(0)
-          }
-        }
-      }
-    }
-    cid.close(0, fs(0))
-    cts.close(0, fs(1))
-    cdin.close(0, fs(2))
-    cdout.close(0, fs(3))
-    cno.close(0, fs(4))
-    cgap.close(0, fs(5))
-
-    vecs(0) = vid.layout_and_close(fs(0))
-    vecs(1) = vts.layout_and_close(fs(1))
-    vecs(2) = vdin.layout_and_close(fs(2))
-    vecs(3) = vdout.layout_and_close(fs(3))
-    vecs(4) = vno.layout_and_close(fs(4))
-    vecs(5) = vgap.layout_and_close(fs(5))
-
-    for (i <- 0 until len) {
-      fs(i).blockForPending()
-    }
-
-
-    val key = Key.make("TimedOrders")
-
-    for (vec <- vecs) {
-      println(s"KEY:: ${vec._key}")
-      //DKV.prefetch(vec._key)
-    }
-    return new Frame(key, headers, vecs)
-
-  }
-
-
   def processDistricts(sc: SparkContext): mutable.HashMap[String, Int] = {
     //DISTRICT - simple parser
     val clusterData = sc.textFile(enforceLocalSparkFile("cluster_map"), 3).cache()
     println(s"\n===> DISTRICTS via H2O#Frame#count: ${clusterData.count()}\n")
 
-    //@TODO: create as hashmap and broadcast it
     val districtMap = sc.accumulableCollection(HashMap[String, Int]())
     clusterData.map(_.split("\t")).map(row => {
-      //val district = DistrictParse(row) // really not need this !
       val a = row(0)
       val b = row(1).trim.toInt
       districtMap += (a -> b)
     }).count() //force to execute
     println(s"\n===> DistrictMap:: ${districtMap.value.size} ")
-
     districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
     districtMap.value
   }

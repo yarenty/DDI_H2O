@@ -6,7 +6,7 @@ apply plugin: 'eclipse'
 
 // Support local launch of application 
 apply plugin: 'application'
-mainClassName = 'com.yarenty.ddi.DataMunging'
+mainClassName = 'com.yarenty.ddi.MLProcessor'
 //
 // The build script settings to fetch plugins and put them on
 // classpath
