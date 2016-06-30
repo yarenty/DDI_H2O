@@ -1,11 +1,12 @@
 package com.yarenty.ddi.schemas
 
+import com.yarenty.ddi.DataMunging
 import water.parser.{DefaultParserProviders, ParseSetup}
 
 /**
   * Weather schema definition.
   *
-  * @param Time
+  * @param ts
   * @param Weather  1-night, 8-sunny, 4-rain, etc...
   * @param Temperature
   * @param Pollution
@@ -13,7 +14,50 @@ import water.parser.{DefaultParserProviders, ParseSetup}
   * Created by yarenty on 24/06/2016.
   * (C)2015 SkyCorp Ltd.
   */
-class Weather(val Time: Option[String],
+class Weather(val ts: Int,
+            val Weather: Option[Int],
+            val Temperature: Option[Float],
+            val Pollution: Option[Float]) extends Product with Serializable {
+
+  override def canEqual(that: Any): Boolean = that.isInstanceOf[Weather]
+  override def productArity: Int = 4
+  override def productElement(n: Int) = n match {
+    case 0 => ts
+    case 1 => Weather
+    case 2 => Temperature
+    case 3 => Pollution
+    case _ => throw new IndexOutOfBoundsException(n.toString)
+  }
+
+  override def toString: String = {
+    val sb = new StringBuffer
+    for (i <- 0 until productArity)
+      sb.append(productElement(i)).append(',')
+    sb.toString
+  }
+
+  def isWrongRow(): Boolean = (0 until productArity).map(idx => productElement(idx)).forall(e => e == None)
+}
+
+/** A dummy csv parser for orders dataset. */
+object WeatherParse extends Serializable {
+
+  def apply(row: WeatherIN): Weather = {
+    import water.support.ParseSupport._
+
+    new Weather(
+      DataMunging.getTimeSlice(row.Time.get), // time
+      row.Weather, // wether: 1 night, 8 sunny, 4 rain etc.
+      row.Temperature, // temp
+      row.Pollution // pollution
+    )
+  }
+
+
+}
+
+
+class WeatherIN(val Time: Option[String],
             val Weather: Option[Int],
             val Temperature: Option[Float],
             val Pollution: Option[Float]) extends Product with Serializable {
@@ -39,19 +83,19 @@ class Weather(val Time: Option[String],
 }
 
 /** A dummy csv parser for orders dataset. */
-object WeatherParse extends Serializable {
+object WeatherINParse extends Serializable {
 
-  def apply(row: Array[String]): Weather = {
+  def apply(row: Array[String]): WeatherIN = {
     import water.support.ParseSupport._
 
-    new Weather(str(row(0)), // time
+    new WeatherIN(
+      str(row(0)), // time
       int(row(1)), // wether: 1 night, 8 sunny, 4 rain etc.
       float(row(2)), // temp
       float(row(3)) // pollution
     )
   }
 }
-
 
 object WeatherCSVParser {
 
