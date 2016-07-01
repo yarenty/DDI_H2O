@@ -156,7 +156,7 @@ object BuildModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "demand")
+    params._ignored_columns = Array("id")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -202,7 +202,7 @@ object BuildModel extends SparkContextSupport {
     params._distribution = Distribution.Family.poisson
     params._ntrees = 50
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "demand")
+    params._ignored_columns = Array("id")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
