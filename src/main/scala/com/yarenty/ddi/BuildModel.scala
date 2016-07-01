@@ -3,9 +3,10 @@ package com.yarenty.ddi
 
 import java.io.{PrintWriter, File}
 import java.net.URI
+import java.io.FileOutputStream
 
 import com.yarenty.ddi.schemas.{OutputLine, SMOutputCSVParser}
-import hex.tree.drf.DRF
+import hex.tree.drf.{DRFModel, DRF}
 import hex.tree.drf.DRFModel.DRFParameters
 import hex.tree.gbm.{GBMModel, GBM}
 import hex.tree.gbm.GBMModel.GBMParameters
@@ -28,7 +29,6 @@ object BuildModel extends SparkContextSupport {
   val train_imp_dir = "/opt/data/season_1/outtest/sm_"
 
 
-
   def process(sc: SparkContext, h2oContext: H2OContext) {
 
     import h2oContext._
@@ -43,20 +43,31 @@ object BuildModel extends SparkContextSupport {
     for (p <- testset) addFiles(sc, absPath(test_imp_dir + p))
     for (i <- 1 to 21) addFiles(sc, absPath(train_imp_dir + "2016-01-" + "%02d".format(i)))
 
-
     val testURIs = testset.map( a => new URI("file:///"+SparkFiles.get("sm_"+a))).toSeq
     val trainURIs = (1 to 21).map( a => new URI("file:///"+SparkFiles.get("sm_2016-01-" + "%02d".format(a)))).toSeq
 
+
+//    val trainURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
+//    val testURIs = Array(new URI("file:///" + SparkFiles.get("sm_2016-01-01"))).toSeq
+
     // Use super-fast advanced H2O CSV parser !!!
-    val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get,trainURIs:_*)
-    val smOutputTest = new h2o.H2OFrame(SMOutputCSVParser.get,testURIs:_*)
+    val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)
+    val smOutputTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs: _*)
 
     println(s"\n===> TRAIN: ${smOutputTrain.numRows()}\n")
     println(s"\n===> TEST: ${smOutputTest.numRows()}\n")
 
 
-    val model = gbmModel(smOutputTrain,smOutputTest)
+    val model = drfModel(smOutputTrain, smOutputTest)
+//    val model = gbmModel(smOutputTrain, smOutputTest)
 
+
+    // SAVE THE MODEL!!!
+    val om = new FileOutputStream("/opt/data/GRFModel_" + System.currentTimeMillis() + ".java")
+    model.toJava(om, false, true)
+
+    //clean before creating outputs
+    smOutputTrain.delete()
 
     for (u <- testURIs) {
 
@@ -64,83 +75,93 @@ object BuildModel extends SparkContextSupport {
 
       val predict = model.score(outFrame)
 
-      val predictionsFromModel = asRDD[DoubleHolder](predict).collect.map(_.result.getOrElse(Double.NaN))
-      println(predictionsFromModel.mkString("\n===> Model predictions: ", ", ", ", ...\n"))
+      //val predictionsFromModel = asRDD[DoubleHolder](predict).collect.map(_.result.getOrElse(Double.NaN))
+      // println(predictionsFromModel.mkString("\n===> Model predictions: ", ", ", ", ...\n"))
+      val vec = predict.get.lastVec
 
-      outFrame.add("predict", predict.vec("predict"))
+      println("OUT VECTOR:" + vec.length)
 
-      val outNames = Array("timeslice", "district ID", "gap", "predict")
+      outFrame.add("predict", vec)
+
+      val inNames = Array("timeslice", "district ID", "gap", "predict")
+      val outNames = Array("timeslice", "districtID", "gap", "predict")
 
       val key = Key.make("output").asInstanceOf[Key[Frame]]
-      val out = new Frame(key, outNames, outFrame.vecs(outNames))
-      val o = asDataFrame(out).groupBy("timeslice", "district ID").agg(Map(
+      val out = new Frame(key, outNames, outFrame.vecs(inNames))
+
+      val zz = new h2o.H2OFrame(out)
+
+
+      val odf = asDataFrame(zz)
+      val o = odf.groupBy("timeslice", "districtID").agg(Map(
         "gap" -> "sum",
         "predict" -> "sum"
       ))
+      o.rename("sum(gap)","gap")
+      o.rename("sum(predict)","predict")
 
+      o.take(20).foreach(println)
 
-      val outTab: RDD[OutputLine] = asRDD[OutputLine](o)
+      val outTab = asRDD[OutputLine](o).collect()
 
       //calculate error
-      var sum = 0.0
+      var sum = 0.0d
       outTab.foreach(x => {
-        sum += x.gap - x.predict
+        sum += ( x.predict.get - x.gap.get.toDouble).abs
       })
 
-      val error = sum / outTab.count
+      val error = sum / outTab.length
 
       println("\nFINAL ERROR:" + error)
 
 
-      val csv = out.toCSV(true, false)
-      val csv_writer = new PrintWriter(new File(u.getPath+"_out"))
+
+      val p = u.getPath.split("/")
+      val n = p(p.length-1)
+
+      val csv = o.toCSV(true, false)
+      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/" + n + "_out.csv"))
       while (csv.available() > 0) {
         csv_writer.write(csv.read.toChar)
       }
       csv_writer.close
 
-      outTab.delete()
+      //outTab.delete()
       o.delete()
       outFrame.delete()
       predict.delete()
 
     }
     println("=========> off to go!!!")
-// get model
+    // get model
 
 
-
-//    predict model: "drf-64ae9c97-6435-4380-b0a9-65ef71569f08",
-//    frame: "sm_2016_01_01.hex",
-//    predictions_frame: "prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60"
+    //    predict model: "drf-64ae9c97-6435-4380-b0a9-65ef71569f08",
+    //    frame: "sm_2016_01_01.hex",
+    //    predictions_frame: "prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60"
 
 
     //bindFrames "combined-prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60",
     // [ "prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60", "sm_2016_01_01.hex" ]
 
 
-
   }
 
 
+  def gbmModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): GBMModel = {
 
-
-
-
-  def gbmModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame):GBMModel = {
-
-    val params = new  GBMParameters()
+    val params = new GBMParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
-    params._ntrees = 50
+    params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns  = Array("id")
+    params._ignored_columns = Array("id","demand")
     params._ignore_const_cols = true
 
-    println("PARAMS:"+params)
+    println("PARAMS:" + params)
     val gbm = new GBM(params)
 
-    println("GBM:"+gbm)
+    println("GBM:" + gbm)
 
     gbm.trainModel.get
 
@@ -172,28 +193,24 @@ object BuildModel extends SparkContextSupport {
   //      "col_sample_rate_change_per_level":1}
 
 
+  def drfModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
 
-  def drf(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): Frame = {
+    val params = new DRFParameters()
+    params._train = smOutputTrain.key
+    params._valid = smOutputTest.key
+    //params._distribution =
+    params._ntrees = 100
+    params._response_column = "gap"
+    params._ignored_columns = Array("id","demand")
+    params._ignore_const_cols = true
 
-     val params = new  DRFParameters()
-     params._train = smOutputTrain.key
-     params._valid = smOutputTest.key
-     params._ntrees = 50
-     params._response_column = "gap"
-     params._ignored_columns  = Array("id")
-     params._ignore_const_cols = true
-
-     println("PARAMS:"+params)
-     val drf = new DRF(params)
+    println("PARAMS:" + params)
+    val drf = new DRF(params)
 
 
-     println("DRF:"+drf)
+    println("DRF:" + drf)
 
-     val model = drf.trainModel.get
+     drf.trainModel.get
 
-     val predict  = model.score(smOutputTest)
-
-     return predict
-
-   }
+  }
 }

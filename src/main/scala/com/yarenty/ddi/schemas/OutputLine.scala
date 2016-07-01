@@ -7,10 +7,10 @@ import water.parser.{DefaultParserProviders, ParseSetup}
   * (C)2015 SkyCorp Ltd.
   */
 class OutputLine(
-                val timeslice: Int,
-                val districtID: Int,
-                val gap: Int,
-                val predict: Float
+                val timeslice: Option[Int],
+                val districtID: Option[Int],
+                val gap: Option[Int],
+                val predict: Option[Double]
               ) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Order]
@@ -44,11 +44,10 @@ object OutputLineParse extends Serializable {
     import water.support.ParseSupport._
 
     new OutputLine(
-      int(row(0)).get, //id
-      int(row(1)).get, //timeslice
-      int(row(2)).get, //district ID
-      float(row(3)).get //destDistrict
-
+      int(row(0)), //id
+      int(row(1)), //timeslice
+      int(row(2)), //district ID
+      Option(row(3).toDouble)
     )
   }
 }
