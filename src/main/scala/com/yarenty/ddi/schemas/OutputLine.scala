@@ -7,11 +7,11 @@ import water.parser.{DefaultParserProviders, ParseSetup}
   * (C)2015 SkyCorp Ltd.
   */
 class OutputLine(
-                val timeslice: Option[Int],
-                val districtID: Option[Int],
-                val gap: Option[Int],
-                val predict: Option[Double]
-              ) extends Product with Serializable {
+                  val timeslice: Option[Int],
+                  val districtID: Option[Int],
+                  val gap: Option[Int],
+                  val predict: Option[Double]
+                ) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Order]
 

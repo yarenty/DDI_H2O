@@ -7,20 +7,22 @@ import water.parser.{DefaultParserProviders, ParseSetup}
   * Weather schema definition.
   *
   * @param ts
-  * @param Weather  1-night, 8-sunny, 4-rain, etc...
+  * @param Weather 1-night, 8-sunny, 4-rain, etc...
   * @param Temperature
   * @param Pollution
   *
-  * Created by yarenty on 24/06/2016.
-  * (C)2015 SkyCorp Ltd.
+  *                Created by yarenty on 24/06/2016.
+  *                (C)2015 SkyCorp Ltd.
   */
 class Weather(val ts: Int,
-            val Weather: Option[Int],
-            val Temperature: Option[Float],
-            val Pollution: Option[Float]) extends Product with Serializable {
+              val Weather: Option[Int],
+              val Temperature: Option[Float],
+              val Pollution: Option[Float]) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Weather]
+
   override def productArity: Int = 4
+
   override def productElement(n: Int) = n match {
     case 0 => ts
     case 1 => Weather
@@ -58,12 +60,14 @@ object WeatherParse extends Serializable {
 
 
 class WeatherIN(val Time: Option[String],
-            val Weather: Option[Int],
-            val Temperature: Option[Float],
-            val Pollution: Option[Float]) extends Product with Serializable {
+                val Weather: Option[Int],
+                val Temperature: Option[Float],
+                val Pollution: Option[Float]) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Weather]
+
   override def productArity: Int = 4
+
   override def productElement(n: Int) = n match {
     case 0 => Time
     case 1 => Weather
@@ -99,7 +103,7 @@ object WeatherINParse extends Serializable {
 
 object WeatherCSVParser {
 
-  def get:ParseSetup = {
+  def get: ParseSetup = {
     //    parseFiles
     //      paths: ["/opt/data/season_1/training_data/weather_data/weather_data_2016-01-01"]
     //      destination_frame: "weather_data_2016_01_01.hex"
@@ -122,7 +126,7 @@ object WeatherCSVParser {
     parseWeather.setNumberColumns(6)
     parseWeather.setSingleQuotes(false)
     parseWeather.setCheckHeader(-1)
-    return  parseWeather
+    return parseWeather
   }
 
 }

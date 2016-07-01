@@ -15,6 +15,7 @@ case class District(val DistrictHash: Option[String],
 }
 
 object DistrictParse extends Serializable {
+
   import water.support.ParseSupport._
 
   def apply(row: Array[String]): District = {

@@ -9,13 +9,13 @@ import water.support.SparkContextSupport
   * Created by yarenty on 29/06/2016.
   * (C)2015 SkyCorp Ltd.
   */
-object MLProcessor extends SparkContextSupport  {
+object MLProcessor extends SparkContextSupport {
 
   def main(args: Array[String]) {
-//    val conf = new SparkConf()
-//      .setMaster("local-cluster[3,2,1024]")
-//      .setSparkHome("/opt/spark-1.6.1-bin-hadoop2.4")
-//      .setAppName("DDI Data Munging")
+    //    val conf = new SparkConf()
+    //      .setMaster("local-cluster[3,2,1024]")
+    //      .setSparkHome("/opt/spark-1.6.1-bin-hadoop2.4")
+    //      .setAppName("DDI Data Munging")
 
     val conf = configure("H2O: DDI Data Munging")
 
@@ -30,14 +30,16 @@ object MLProcessor extends SparkContextSupport  {
     import h2oContext.implicits._
 
     println(s"\n\n H2O CONTEXT is TOO !!!!!!\n")
-  //do munging stuff
+    //do munging stuff
     //DataMunging.process(sc,h2oContext)
-    BuildModel.process(sc,h2oContext)
+
+    // do modelling stuff
+    BuildModel.process(sc, h2oContext)
 
 
 
     // Shutdown Spark cluster and H2O
-   // h2oContext.stop(stopSparkContext = true)
+    // h2oContext.stop(stopSparkContext = true)
 
   }
 

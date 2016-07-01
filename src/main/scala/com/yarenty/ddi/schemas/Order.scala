@@ -70,7 +70,6 @@ object OrderParse extends Serializable {
 }
 
 
-
 //    parseFiles
 //      paths: ["/opt/data/season_1/training_data/order_data/order_data_2016-01-01"]
 //      destination_frame: "order_data_2016_01_01.hex"
@@ -86,7 +85,7 @@ object OrderParse extends Serializable {
 
 object OrderCSVParser {
 
-  def get:ParseSetup = {
+  def get: ParseSetup = {
     val parseOrders: ParseSetup = new ParseSetup()
     val orderNames: Array[String] = Array(
       "OrderId", "DriverId", "PassengerId", "StartDH", "DestDH", "Price", "Time")

@@ -6,6 +6,7 @@ import java.net.URI
 import java.io.FileOutputStream
 
 import com.yarenty.ddi.schemas.{OutputLine, SMOutputCSVParser}
+import hex.Distribution
 import hex.tree.drf.{DRFModel, DRF}
 import hex.tree.drf.DRFModel.DRFParameters
 import hex.tree.gbm.{GBMModel, GBM}
@@ -43,12 +44,12 @@ object BuildModel extends SparkContextSupport {
     for (p <- testset) addFiles(sc, absPath(test_imp_dir + p))
     for (i <- 1 to 21) addFiles(sc, absPath(train_imp_dir + "2016-01-" + "%02d".format(i)))
 
-    val testURIs = testset.map( a => new URI("file:///"+SparkFiles.get("sm_"+a))).toSeq
-    val trainURIs = (1 to 21).map( a => new URI("file:///"+SparkFiles.get("sm_2016-01-" + "%02d".format(a)))).toSeq
+    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
+    val trainURIs = (1 to 21).map(a => new URI("file:///" + SparkFiles.get("sm_2016-01-" + "%02d".format(a)))).toSeq
 
 
-//    val trainURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
-//    val testURIs = Array(new URI("file:///" + SparkFiles.get("sm_2016-01-01"))).toSeq
+    //    val trainURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
+    //    val testURIs = Array(new URI("file:///" + SparkFiles.get("sm_2016-01-01"))).toSeq
 
     // Use super-fast advanced H2O CSV parser !!!
     val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)
@@ -59,12 +60,12 @@ object BuildModel extends SparkContextSupport {
 
 
     val model = drfModel(smOutputTrain, smOutputTest)
-//    val model = gbmModel(smOutputTrain, smOutputTest)
+    //    val model = gbmModel(smOutputTrain, smOutputTest)
 
 
     // SAVE THE MODEL!!!
     val om = new FileOutputStream("/opt/data/GRFModel_" + System.currentTimeMillis() + ".java")
-    model.toJava(om, false, true)
+    model.toJava(om, false, false)
 
     //clean before creating outputs
     smOutputTrain.delete()
@@ -97,8 +98,8 @@ object BuildModel extends SparkContextSupport {
         "gap" -> "sum",
         "predict" -> "sum"
       ))
-      o.rename("sum(gap)","gap")
-      o.rename("sum(predict)","predict")
+      o.rename("sum(gap)", "gap")
+      o.rename("sum(predict)", "predict")
 
       o.take(20).foreach(println)
 
@@ -107,7 +108,7 @@ object BuildModel extends SparkContextSupport {
       //calculate error
       var sum = 0.0d
       outTab.foreach(x => {
-        sum += ( x.predict.get - x.gap.get.toDouble).abs
+        sum += (x.predict.get - x.gap.get.toDouble).abs
       })
 
       val error = sum / outTab.length
@@ -117,10 +118,10 @@ object BuildModel extends SparkContextSupport {
 
 
       val p = u.getPath.split("/")
-      val n = p(p.length-1)
+      val n = p(p.length - 1)
 
       val csv = o.toCSV(true, false)
-      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/" + n + "_out.csv"))
+      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/" + n + "_out2.csv"))
       while (csv.available() > 0) {
         csv_writer.write(csv.read.toChar)
       }
@@ -155,7 +156,7 @@ object BuildModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand")
+    params._ignored_columns = Array("id", "demand")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -198,10 +199,10 @@ object BuildModel extends SparkContextSupport {
     val params = new DRFParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
-    //params._distribution =
-    params._ntrees = 100
+    params._distribution = Distribution.Family.poisson
+    params._ntrees = 50
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand")
+    params._ignored_columns = Array("id", "demand")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -210,7 +211,7 @@ object BuildModel extends SparkContextSupport {
 
     println("DRF:" + drf)
 
-     drf.trainModel.get
+    drf.trainModel.get
 
   }
 }

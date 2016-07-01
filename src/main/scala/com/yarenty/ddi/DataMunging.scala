@@ -33,10 +33,10 @@ object DataMunging extends SparkContextSupport {
 
   var PROCESSED_DAY = "2016-01-01"
   val data_dir = "/opt/data/season_1/"
-//  val training_dir = data_dir + "training_data/"
+  //  val training_dir = data_dir + "training_data/"
   val training_dir = data_dir + "test_set_1/"
 
-//  val output_dir = data_dir + "outtest/sm_"
+  //  val output_dir = data_dir + "outtest/sm_"
   val output_dir = data_dir + "outtrain/sm_"
 
   val order_csv = training_dir + "order_data/order_data_"
@@ -46,34 +46,6 @@ object DataMunging extends SparkContextSupport {
   val traffic_csv = training_dir + "traffic_data/traffic_data_"
   val weather_csv = training_dir + "weather_data/weather_data_"
 
-
-  def mergePOI(poi: Map[Int, Map[String, Int]]): Map[Int, Map[String, Int]] = {
-    poi.map( row => {
-      val idx = row._1
-      val old = row._2
-      var now: Map[String, Int] = Map[String, Int]()
-
-
-      for(i <- 1 to 25 ) {
-        var tmp = 0
-        val im = s"${i}"
-        println(im)
-        if (old.contains(im)) {
-           println("hasit")
-          tmp += old.get(im).get
-        }
-        for (j <- 1 to 20){
-          val id = s"${i}#${j}"
-          if (old.contains(id)) {
-            tmp += old.get(id).get
-          }
-        }
-        now += (s"${i}" -> tmp)
-      }
-
-      idx -> now
-    })
-  }
 
   def process(sc: SparkContext, h2oContext: H2OContext) {
 
@@ -135,7 +107,7 @@ object DataMunging extends SparkContextSupport {
     }).collect().toMap
 
 
-    val mergedPOI: Map[Int, Map[String, Int]] =  mergePOI(poi)
+    val mergedPOI: Map[Int, Map[String, Int]] = mergePOI(poi)
 
 
     for (m <- mergedPOI) {
@@ -143,11 +115,11 @@ object DataMunging extends SparkContextSupport {
     }
 
 
-//    for (i <- 1 to 21) {
-//
-//      PROCESSED_DAY = "2016-01-" + "%02d".format(i)
+    //    for (i <- 1 to 21) {
+    //
+    //      PROCESSED_DAY = "2016-01-" + "%02d".format(i)
 
-    val pd = Array("2016-01-22_test","2016-01-24_test","2016-01-26_test","2016-01-28_test","2016-01-30_test")
+    val pd = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
 
     for (p <- pd) {
       PROCESSED_DAY = p
@@ -316,39 +288,38 @@ object DataMunging extends SparkContextSupport {
 
 
 
-//      "1", "1#1", "1#2", "1#3", "1#4", "1#5", "1#6", "1#7", "1#8", "1#9", "1#10", "1#11",
-//      "2#1", "2#2", "2#3", "2#4", "2#5", "2#6", "2#7", "2#8", "2#9", "2#10", "2#11", "2#12", "2#13",
-//      "3", "3#1", "3#2", "3#3", "3#4", "3#5",
-//      "4", "4#1", "4#2", "4#3", "4#4", "4#5", "4#6", "4#7", "4#8", "4#9", "4#10", "4#11", "4#12", "4#13", "4#14", "4#15", "4#16", "4#17", "4#18",
-//      "5", "5#1", "5#2", "5#3", "5#4",
-//      "6", "6#1", "6#2", "6#3", "6#4",
-//      "7", "7#1", "7#2", "7#3",
-//      "8", "8#1", "8#2", "8#3", "8#4", "8#5",
-//      "10#1",
-//      "11", "11#1", "11#2", "11#3", "11#4", "11#5", "11#6", "11#7", "11#8",
-//      "12",
-//      "13#1", "13#3", "13#4", "13#5", "13#6", "13#8",
-//      "14", "14#1", "14#2", "14#3", "14#4", "14#5", "14#6", "14#7", "14#8", "14#9", "14#10",
-//      "15", "15#1", "15#2", "15#3", "15#4", "15#5", "15#6", "15#7", "15#8",
-//      "16", "16#1", "16#2", "16#3", "16#4", "16#5", "16#6", "16#7", "16#8", "16#9", "16#10", "16#11", "16#12",
-//      "17", "17#1", "17#2", "17#3", "17#4", "17#5",
-//      "18",
-//      "19", "19#1", "19#2", "19#3", "19#4",
-//      "20", "20#1", "20#2", "20#3", "20#4", "20#5", "20#6", "20#7", "20#8", "20#9",
-//      "21#1", "21#2", "21#4",
-//      "22", "22#1", "22#2", "22#3", "22#4", "22#5", "22#6",
-//      "23", "23#1", "23#2", "23#3", "23#4", "23#5", "23#6",
-//      "24", "24#1", "24#2", "24#3",
-//      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
-
+      //      "1", "1#1", "1#2", "1#3", "1#4", "1#5", "1#6", "1#7", "1#8", "1#9", "1#10", "1#11",
+      //      "2#1", "2#2", "2#3", "2#4", "2#5", "2#6", "2#7", "2#8", "2#9", "2#10", "2#11", "2#12", "2#13",
+      //      "3", "3#1", "3#2", "3#3", "3#4", "3#5",
+      //      "4", "4#1", "4#2", "4#3", "4#4", "4#5", "4#6", "4#7", "4#8", "4#9", "4#10", "4#11", "4#12", "4#13", "4#14", "4#15", "4#16", "4#17", "4#18",
+      //      "5", "5#1", "5#2", "5#3", "5#4",
+      //      "6", "6#1", "6#2", "6#3", "6#4",
+      //      "7", "7#1", "7#2", "7#3",
+      //      "8", "8#1", "8#2", "8#3", "8#4", "8#5",
+      //      "10#1",
+      //      "11", "11#1", "11#2", "11#3", "11#4", "11#5", "11#6", "11#7", "11#8",
+      //      "12",
+      //      "13#1", "13#3", "13#4", "13#5", "13#6", "13#8",
+      //      "14", "14#1", "14#2", "14#3", "14#4", "14#5", "14#6", "14#7", "14#8", "14#9", "14#10",
+      //      "15", "15#1", "15#2", "15#3", "15#4", "15#5", "15#6", "15#7", "15#8",
+      //      "16", "16#1", "16#2", "16#3", "16#4", "16#5", "16#6", "16#7", "16#8", "16#9", "16#10", "16#11", "16#12",
+      //      "17", "17#1", "17#2", "17#3", "17#4", "17#5",
+      //      "18",
+      //      "19", "19#1", "19#2", "19#3", "19#4",
+      //      "20", "20#1", "20#2", "20#3", "20#4", "20#5", "20#6", "20#7", "20#8", "20#9",
+      //      "21#1", "21#2", "21#4",
+      //      "22", "22#1", "22#2", "22#3", "22#4", "22#5", "22#6",
+      //      "23", "23#1", "23#2", "23#3", "23#4", "23#5", "23#6",
+      //      "24", "24#1", "24#2", "24#3",
+      //      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
 
 
       val headers = Array("id", "timeslice", "districtID", "destDistrict", "demand", "gap",
         "traffic1", "traffic2", "traffic3", "traffic4",
         "weather", "temp", "pollution",
-        "1","2","3","4","5","6","7","8","10",
-        "11","12","13","14","15","16","17","18","19","20",
-        "21","22","23","24","25"
+        "1", "2", "3", "4", "5", "6", "7", "8", "10",
+        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+        "21", "22", "23", "24", "25"
       )
       val types = Array(Vec.T_NUM, Vec.T_CAT, Vec.T_CAT, Vec.T_CAT, Vec.T_NUM, Vec.T_NUM,
         Vec.T_NUM, Vec.T_NUM, Vec.T_NUM, Vec.T_NUM,
@@ -360,7 +331,7 @@ object DataMunging extends SparkContextSupport {
         gaps,
         traffic,
         weather,
-        mergedPOI))   //poi
+        mergedPOI)) //poi
 
       val v = DKV.put(myData)
 
@@ -498,6 +469,41 @@ object DataMunging extends SparkContextSupport {
     val key = Key.make("TimedOrders")
     return new Frame(key, headers, vecs)
 
+  }
+
+
+  /**
+    * Extremely simple PCA ;-)
+    *
+    * @param poi
+    * @return
+    */
+  def mergePOI(poi: Map[Int, Map[String, Int]]): Map[Int, Map[String, Int]] = {
+    poi.map(row => {
+      val idx = row._1
+      val old = row._2
+      var now: Map[String, Int] = Map[String, Int]()
+
+
+      for (i <- 1 to 25) {
+        var tmp = 0
+        val im = s"${i}"
+        println(im)
+        if (old.contains(im)) {
+          println("hasit")
+          tmp += old.get(im).get
+        }
+        for (j <- 1 to 20) {
+          val id = s"${i}#${j}"
+          if (old.contains(id)) {
+            tmp += old.get(id).get
+          }
+        }
+        now += (s"${i}" -> tmp)
+      }
+
+      idx -> now
+    })
   }
 
 

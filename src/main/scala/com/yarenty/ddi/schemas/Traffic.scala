@@ -2,9 +2,9 @@ package com.yarenty.ddi.schemas
 
 import water.parser._
 
-/**                                          ß
+/** ß
   * Traffic schema definition
- *
+  *
   * @param DistrictHash
   * @param Traffic1
   * @param Traffic2
@@ -16,14 +16,16 @@ import water.parser._
   * (C)2015 SkyCorp Ltd.  *
   */
 class TrafficIN(val DistrictHash: Option[String],
-            val Traffic1: Option[String],
-            val Traffic2: Option[String],
-            val Traffic3: Option[String],
-            val Traffic4: Option[String],
-            val Time: Option[String]) extends Product with Serializable {
+                val Traffic1: Option[String],
+                val Traffic2: Option[String],
+                val Traffic3: Option[String],
+                val Traffic4: Option[String],
+                val Time: Option[String]) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[TrafficIN]
+
   override def productArity: Int = 6
+
   override def productElement(n: Int) = n match {
     case 0 => DistrictHash
     case 1 => Traffic1
@@ -64,10 +66,9 @@ object TrafficINParse extends Serializable {
 }
 
 
-
 /**
   * Traffic schema definition
- *
+  *
   * @param DistrictHash
   * @param Traffic1
   * @param Traffic2
@@ -79,14 +80,16 @@ object TrafficINParse extends Serializable {
   * (C)2015 SkyCorp Ltd.  *
   */
 class Traffic(val DistrictHash: Option[String],
-            val Traffic1: Option[Int],
-            val Traffic2: Option[Int],
-            val Traffic3: Option[Int],
-            val Traffic4: Option[Int],
-            val Time: Option[String]) extends Product with Serializable {
+              val Traffic1: Option[Int],
+              val Traffic2: Option[Int],
+              val Traffic3: Option[Int],
+              val Traffic4: Option[Int],
+              val Time: Option[String]) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Traffic]
+
   override def productArity: Int = 6
+
   override def productElement(n: Int) = n match {
     case 0 => DistrictHash
     case 1 => Traffic1
@@ -132,9 +135,8 @@ object TrafficParse extends Serializable {
 }
 
 
-
-object TrafficCSVParser{
-  def get:ParseSetup= {
+object TrafficCSVParser {
+  def get: ParseSetup = {
     //    parseFiles
     //      paths: ["/opt/data/season_1/training_data/traffic_data/traffic_data_2016-01-01"]
     //      destination_frame: "traffic_data_2016_01_01.hex"
