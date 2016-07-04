@@ -2,27 +2,24 @@ package com.yarenty.ddi
 
 import java.io.{PrintWriter, File}
 
-import org.apache.spark._
-import org.apache.spark.SparkContext._
 import water._
 import water.fvec._
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer, HashMap}
 import org.apache.spark.h2o._
+import org.apache.spark._
+//import org.apache.spark.{SparkFiles, h2o, SparkContext}
+//import org.apache.spark.h2o.{RDD, H2OFrame, DoubleHolder, H2OContext}
+import org.apache.spark.broadcast.Broadcast
 
-import hex.deeplearning.DeepLearning
-import hex.deeplearning.DeepLearningModel.DeepLearningParameters
-
-//import water.parser._
-
-//import org.apache.spark.h2o.{DoubleHolder, H2OContext, H2OFrame}
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import water.support.SparkContextSupport
 import com.yarenty.ddi.schemas._
 
 import com.yarenty.ddi.utils._
+
+
 
 /**
   * Created by yarenty on 23/06/2016.
@@ -33,40 +30,31 @@ object DataMunging extends SparkContextSupport {
 
   var PROCESSED_DAY = "2016-01-01"
   val data_dir = "/opt/data/season_1/"
-  //  val training_dir = data_dir + "training_data/"
-  val training_dir = data_dir + "test_set_1/"
-
-  //  val output_dir = data_dir + "outtest/sm_"
-  val output_dir = data_dir + "outtrain/sm_"
-
-  val order_csv = training_dir + "order_data/order_data_"
-
-  val cluster_csv = training_dir + "cluster_map/cluster_map"
-  val poi_csv = training_dir + "poi_data/poi_data"
-  val traffic_csv = training_dir + "traffic_data/traffic_data_"
-  val weather_csv = training_dir + "weather_data/weather_data_"
+  val output_dir = "/opt/data/season_1/outdata/day_"
 
 
-  def process(sc: SparkContext, h2oContext: H2OContext) {
+  val cluster_csv = data_dir + "test_set_1/cluster_map/cluster_map"
+  val poi_csv = data_dir + "test_set_1/poi_data/poi_data"
+  var order_csv = ""
+  var traffic_csv = ""
+  var weather_csv = ""
+
+
+  def process(h2oContext:H2OContext) {
 
     import h2oContext._
     import h2oContext.implicits._
+    val sc = h2oContext.sparkContext
+    implicit val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
 
-    println(s"\n\n LETS MUNG\n")
-
-    addFiles(sc,
+    addFiles(h2oContext.sparkContext,
       absPath(cluster_csv),
       absPath(poi_csv)
     )
 
-
-
-
-
-
-    println(s"\n\n!!!!! FILES ADDED start CSV parser!!!!\n\n")
-
-    // get districts and now broadcast them
+    println(s" Info about district added - start processing.")
+    //will need distric id info everywhere - so load them and broadcast
     val disctrictMapBR = sc.broadcast(processDistricts(sc))
 
 
@@ -75,115 +63,85 @@ object DataMunging extends SparkContextSupport {
     println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
 
     //  Use H2O to RDD transformation
-    val poiTable = poiData.vecs()
-    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
+//    val poiTable = poiData.vecs()
+//    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
 
 
     val poi: Map[Int, Map[String, Int]] = asRDD[POI](poiData).map(row => {
-
-      val iter = row.productIterator
-      val district: String = iter.next match {
-        case None => ""
-        case Some(value) => value.toString // value is of type String
-      }
-
-      //      println(s"district: ${district}")
-      val din: Int = disctrictMapBR.value.get(district).get
-      var m: Map[String, Int] = Map[String, Int]()
-      while (iter.hasNext) {
-
-        val col = iter.next match {
-          case None => ""
-          case Some(value) => value.toString // value is of type String
-        }
-
-        if (!col.isEmpty && col != "") {
-          //          println(s" COL: ${col}")
-          val v = col.split(":")
-          m += (v(0) -> v(1).toInt)
-        }
-      }
-      din -> m
+      getPOIMap(disctrictMapBR, row)
     }).collect().toMap
 
 
     val mergedPOI: Map[Int, Map[String, Int]] = mergePOI(poi)
-
 
     for (m <- mergedPOI) {
       println(m)
     }
 
 
-    //    for (i <- 1 to 21) {
-    //
-    //      PROCESSED_DAY = "2016-01-" + "%02d".format(i)
+    val files = {
+      order_csv = data_dir + "training_data/order_data/order_data_"
+      traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
+      weather_csv = data_dir + "training_data/weather_data/weather_data_"
 
-    val pd = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
+      val out: Seq[Tuple4[String, String, String, String]] =
+        (1 to 21).map(i => {
+          val pd = "2016-01-" + "%02d".format(i)
+          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
+        }).toSeq
 
-    for (p <- pd) {
-      PROCESSED_DAY = p
+      order_csv = data_dir + "test_set_1/order_data/order_data_"
+      traffic_csv = data_dir + "test_set_1/traffic_data/traffic_data_"
+      weather_csv = data_dir + "test_set_1/weather_data/weather_data_"
+      val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
+      var x = 21
+
+      out ++ a.map(pd => {
+        x += 1
+        (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
+      })
+    }
+
+
+    for (f <- files) {
+      PROCESSED_DAY = f._1
 
       println(s"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\nSTART PROCESSING : ${PROCESSED_DAY}")
 
       addFiles(sc,
-        absPath(order_csv + PROCESSED_DAY),
-        absPath(traffic_csv + PROCESSED_DAY),
-        absPath(weather_csv + PROCESSED_DAY)
+        absPath(f._2),
+        absPath(f._3),
+        absPath(f._4)
       )
 
 
 
-
-      // Use super-fast advanced H2O CSV parser !!!
       val orderData = new h2o.H2OFrame(OrderCSVParser.get,
-        new File(SparkFiles.get("order_data_" + PROCESSED_DAY))) //+"_test"
+        new File(SparkFiles.get("order_data_" + PROCESSED_DAY))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
-
-      //  Use H2O to RDD transformation
-      val orderTable = asRDD[Order](orderData)
-      println(s"\n===> ORDERS in ${order_csv} via RDD#count call: ${orderTable.count()}\n")
+      val orderTable = asRDD[Order](orderData)       //  Use H2O to RDD transformation
+      println(s"\n===> ORDERS in ${f._2} via RDD#count call: ${orderTable.count()}\n")
 
 
 
-
+      //get number of demand drives
       val orders: Map[Int, Int] = orderTable.map(row => {
         val timeslice = getTimeSlice(row.Time.get)
         var from = disctrictMapBR.value.get(row.StartDH.get)
         var to = disctrictMapBR.value.get(row.DestDH.get)
-
-        if (to == None) {
-          //println(s" destination not existing: ${row.DestDH} ")
-          to = Option(0)
-        }
-
-        if (from == None) {
-          from = Option(0)
-        }
-
+        if (to == None) to = Option(0)
         val indx = getIndex(timeslice, from.get, to.get)
         indx
       }).groupBy(identity).mapValues(_.size).collect().toMap
 
-
-
+      //get number of gap drives (did not happen)
       val gaps: Map[Int, Int] = orderTable.map(row => {
         val timeslice = getTimeSlice(row.Time.get)
-        val gap = row.DriverId.get
         var from = disctrictMapBR.value.get(row.StartDH.get)
         var to = disctrictMapBR.value.get(row.DestDH.get)
-
-        if (to == None) {
-          //println(s" destination not existing: ${row.DestDH} ")
-          to = Option(0)
-        }
-
-        if (from == None) {
-          from = Option(0)
-        }
-
+        if (to == None) to = Option(0)
         val indx = getIndex(timeslice, from.get, to.get)
-
+        val gap = row.DriverId.get
         if (gap != "NULL") {
           0
         } else {
@@ -191,28 +149,19 @@ object DataMunging extends SparkContextSupport {
         }
       }).groupBy(identity).mapValues(_.size).collect().toMap
 
-
-
       println(s"\n===> ALL ORDERS :: ${orders.size} ")
-      orders.take(10).foreach(println)
       println(s"\n===> GAP ORDERS :: ${gaps.size} ")
-      gaps.take(10).foreach(println)
 
 
 
-      // Use super-fast advanced H2O CSV parser !!!
       val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
-        new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY))) // +"_test"
+        new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))  // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
-      //  Use H2O to RDD transformation
       val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
         .map(row => TrafficParse(row))
         .filter(!_.isWrongRow())
-      //val trafficTable = asRDD[Traffic](trafficData)
-      println(s"\n===> TRAFFIC in ${order_csv} via RDD#count call: ${trafficTable.count()}\n")
-
-
+      println(s"\n===> TRAFFIC in ${f._3} via RDD#count call: ${trafficTable.count()}\n")
 
 
       var traffic: Map[Int, Tuple4[Int, Int, Int, Int]] = trafficTable.map(row => {
@@ -225,66 +174,61 @@ object DataMunging extends SparkContextSupport {
         val t4 = row.Traffic2.get
         (ts * 100 + din) ->(t1, t2, t3, t4)
       }).collect().toMap
-
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
-      var working: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
+
+      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
       //fill traffic
       for (din <- 1 to 66) {
         for (i <- 1 to 144) {
           val idx = i * 100 + din
           if (traffic.contains(idx)) {
-            working = traffic.get(idx).get
+            filledTraffic = traffic.get(idx).get
           }
         }
         for (i <- 1 to 144) {
           val idx = i * 100 + din
           if (traffic.contains(idx)) {
-            working = traffic.get(idx).get
+            filledTraffic = traffic.get(idx).get
           } else {
-            traffic += idx -> working
+            traffic += idx -> filledTraffic
           }
         }
       }
-      println(s" TRAFFIC MAP SIZE: ${traffic.size}")
+      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
 
 
 
 
-      // Use super-fast advanced H2O CSV parser !!!
+
       val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
-        new File(SparkFiles.get("weather_data_" + PROCESSED_DAY))) //+"_test"
+        new File(SparkFiles.get("weather_data_" + PROCESSED_DAY))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
-
-      //  Use H2O to RDD transformation
       val weatherTable: h2o.RDD[Weather] = asRDD[WeatherIN](weatherData)
         .map(row => WeatherParse(row)).filter(!_.isWrongRow)
-
-      println(s"\n===> WEATHER in ${order_csv} via RDD#count call: ${weatherTable.count()}\n")
+      println(s"\n===> WEATHER in ${f._4} via RDD#count call: ${weatherTable.count()}\n")
 
 
       var weather: Map[Int, Tuple3[Int, Float, Float]] = weatherTable.map(row => {
         row.ts ->(row.Weather.get, row.Temperature.get, row.Pollution.get)
       }).collect().toMap
+      println(s" WEATHER MAP SIZE: ${weather.size}")
 
-      var workingw: Tuple3[Int, Float, Float] = (0, 0, 0)
-      //fill traffic
-
+      var filledWeather: Tuple3[Int, Float, Float] = (0, 0, 0)
       for (i <- 1 to 144) {
         if (weather.contains(i)) {
-          workingw = weather.get(i).get
+          filledWeather = weather.get(i).get
         }
       }
       for (i <- 1 to 144) {
         if (weather.contains(i)) {
-          workingw = weather.get(i).get
+          filledWeather = weather.get(i).get
         } else {
-          weather += i -> workingw
+          weather += i -> filledWeather
         }
       }
-
-      println(s" TRAFFIC MAP SIZE: ${weather.size}")
+      println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
 
 
 
@@ -326,7 +270,7 @@ object DataMunging extends SparkContextSupport {
         Vec.T_CAT, Vec.T_NUM, Vec.T_NUM,
         Vec.T_NUM)
 
-      val myData = new h2o.H2OFrame(getData(headers, types,
+      val myData = new h2o.H2OFrame(lineBuilder(headers, types,
         orders,
         gaps,
         traffic,
@@ -336,7 +280,7 @@ object DataMunging extends SparkContextSupport {
       val v = DKV.put(myData)
 
       println(s" AND MY DATA IS: ${myData.key} =>  ${myData.numCols()} / ${myData.numRows()}")
-      println(s"frame::${v}")
+      println(s" frame::${v}")
 
 
       val csv = myData.toCSV(true, false)
@@ -347,7 +291,12 @@ object DataMunging extends SparkContextSupport {
       }
       csv_writer.close
 
-      println("!!!!!!!!!!!!!!!!!!!!\n!!!!!!OUTPUT CREATED!!!\n!!!!!!!!!!!!!!")
+      println(
+        s"""
+           |!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+           |!!  OUTPUT CREATED: ${output_dir + PROCESSED_DAY} !!
+           |!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         """.stripMargin)
 
 
       //clean
@@ -366,7 +315,8 @@ object DataMunging extends SparkContextSupport {
   }
 
 
-  def getData(headers: Array[String], types: Array[Byte],
+
+  def lineBuilder(headers: Array[String], types: Array[Byte],
               orders: Map[Int, Int],
               gaps: Map[Int, Int],
               traffic: Map[Int, Tuple4[Int, Int, Int, Int]],
@@ -473,7 +423,38 @@ object DataMunging extends SparkContextSupport {
 
 
   /**
+    * Return map of POIs .
+    *
+    * @param disctrictMapBR
+    * @param row
+    * @return    (DisctrictID -> Map [Category, HowMany]])
+    */
+  def getPOIMap(disctrictMapBR: Broadcast[mutable.HashMap[String, Int]], row: POI): (Int, Map[String, Int]) = {
+    val iter = row.productIterator
+    val district: String = iter.next match {
+      case None => ""
+      case Some(value) => value.toString // value is of type String
+    }
+
+    val din: Int = disctrictMapBR.value.get(district).get
+    var m: Map[String, Int] = Map[String, Int]()
+    while (iter.hasNext) {
+      val col = iter.next match {
+        case None => ""
+        case Some(value) => value.toString // value is of type String
+      }
+
+      if (!col.isEmpty && col != "") {
+        val v = col.split(":")
+        m += (v(0) -> v(1).toInt)
+      }
+    }
+    din -> m
+  }
+
+  /**
     * Extremely simple PCA ;-)
+    * Merge all POI sub categories into simple 1.
     *
     * @param poi
     * @return
@@ -484,13 +465,10 @@ object DataMunging extends SparkContextSupport {
       val old = row._2
       var now: Map[String, Int] = Map[String, Int]()
 
-
       for (i <- 1 to 25) {
         var tmp = 0
         val im = s"${i}"
-        println(im)
         if (old.contains(im)) {
-          println("hasit")
           tmp += old.get(im).get
         }
         for (j <- 1 to 20) {
@@ -544,19 +522,21 @@ object DataMunging extends SparkContextSupport {
   }
 
 
+  /**
+    * Parse districts data -> collect them and then redistribute.
+    *
+    * @param sc
+    * @return
+    */
   def processDistricts(sc: SparkContext): mutable.HashMap[String, Int] = {
     //DISTRICT - simple parser
     val clusterData = sc.textFile(enforceLocalSparkFile("cluster_map"), 3).cache()
-    println(s"\n===> DISTRICTS via H2O#Frame#count: ${clusterData.count()}\n")
-
     val districtMap = sc.accumulableCollection(HashMap[String, Int]())
     clusterData.map(_.split("\t")).map(row => {
-      val a = row(0)
-      val b = row(1).trim.toInt
-      districtMap += (a -> b)
-    }).count() //force to execute
-    println(s"\n===> DistrictMap:: ${districtMap.value.size} ")
-    districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
+      districtMap += (row(0) -> row(1).trim.toInt)
+    }).count()
+    println(s"===> DistrictMap size:: ${districtMap.value.size} ")
+    //    districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
     districtMap.value
   }
 }

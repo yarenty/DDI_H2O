@@ -26,15 +26,17 @@ import water.support.SparkContextSupport
 object BuildModel extends SparkContextSupport {
 
 
-  val test_imp_dir = "/opt/data/season_1/outtrain/sm_"
-  val train_imp_dir = "/opt/data/season_1/outtest/sm_"
 
 
-  def process(sc: SparkContext, h2oContext: H2OContext) {
+  val test_imp_dir = "/opt/data/season_1/outdata/day_"
+  val train_imp_dir = "/opt/data/season_1/outdata/day_"
+
+
+  def process(h2oContext:H2OContext) {
 
     import h2oContext._
     import h2oContext.implicits._
-
+    val sc = h2oContext.sparkContext
     implicit val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
 
@@ -47,10 +49,6 @@ object BuildModel extends SparkContextSupport {
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
     val trainURIs = (1 to 21).map(a => new URI("file:///" + SparkFiles.get("sm_2016-01-" + "%02d".format(a)))).toSeq
 
-
-    //    val trainURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
-    //    val testURIs = Array(new URI("file:///" + SparkFiles.get("sm_2016-01-01"))).toSeq
-
     // Use super-fast advanced H2O CSV parser !!!
     val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)
     val smOutputTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs: _*)
@@ -60,8 +58,6 @@ object BuildModel extends SparkContextSupport {
 
 
     val model = drfModel(smOutputTrain, smOutputTest)
-    //    val model = gbmModel(smOutputTrain, smOutputTest)
-
 
     // SAVE THE MODEL!!!
     val om = new FileOutputStream("/opt/data/GRFModel_" + System.currentTimeMillis() + ".java")
@@ -75,20 +71,16 @@ object BuildModel extends SparkContextSupport {
       val outFrame = new h2o.H2OFrame(SMOutputCSVParser.get, u)
 
       val predict = model.score(outFrame)
-
-      //val predictionsFromModel = asRDD[DoubleHolder](predict).collect.map(_.result.getOrElse(Double.NaN))
-      // println(predictionsFromModel.mkString("\n===> Model predictions: ", ", ", ", ...\n"))
       val vec = predict.get.lastVec
 
       println("OUT VECTOR:" + vec.length)
 
       outFrame.add("predict", vec)
 
-      val inNames = Array("timeslice", "district ID", "gap", "predict")
-      val outNames = Array("timeslice", "districtID", "gap", "predict")
+      val names = Array("timeslice", "districtID", "gap", "predict")
 
       val key = Key.make("output").asInstanceOf[Key[Frame]]
-      val out = new Frame(key, outNames, outFrame.vecs(inNames))
+      val out = new Frame(key, names, outFrame.vecs(names))
 
       val zz = new h2o.H2OFrame(out)
 
@@ -131,19 +123,11 @@ object BuildModel extends SparkContextSupport {
       o.delete()
       outFrame.delete()
       predict.delete()
+       // model.deviance()
 
     }
     println("=========> off to go!!!")
-    // get model
 
-
-    //    predict model: "drf-64ae9c97-6435-4380-b0a9-65ef71569f08",
-    //    frame: "sm_2016_01_01.hex",
-    //    predictions_frame: "prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60"
-
-
-    //bindFrames "combined-prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60",
-    // [ "prediction-3ea340bc-36ac-4271-8062-9a1bc7b2ab60", "sm_2016_01_01.hex" ]
 
 
   }
@@ -199,7 +183,8 @@ object BuildModel extends SparkContextSupport {
     val params = new DRFParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
-    params._distribution = Distribution.Family.poisson
+    params._distribution = Distribution.Family.gaussian
+
     params._ntrees = 50
     params._response_column = "gap"
     params._ignored_columns = Array("id")

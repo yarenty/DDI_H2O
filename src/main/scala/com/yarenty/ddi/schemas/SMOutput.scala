@@ -175,7 +175,7 @@ object SMOutputCSVParser {
   def get: ParseSetup = {
     val parse: ParseSetup = new ParseSetup()
     val orderNames: Array[String] = Array(
-      "id", "timeslice", "district ID", "destDistrict", "demand", "gap",
+      "id", "timeslice", "districtID", "destDistrict", "demand", "gap",
       "traffic1", "traffic2", "traffic3", "traffic4", "weather", "temp", "pollution",
       "1", "2", "3", "4", "5", "6", "7", "8", "10",
       "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
