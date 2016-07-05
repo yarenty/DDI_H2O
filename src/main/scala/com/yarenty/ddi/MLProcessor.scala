@@ -43,7 +43,7 @@ object MLProcessor extends SparkContextSupport {
 
 
     //do munging stuff
-    //DataMunging.process(h2oContext)
+    DataMunging.process(h2oContext)
 
     // do modelling stuff
     BuildAdvancedModel.process(h2oContext)

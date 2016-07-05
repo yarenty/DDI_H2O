@@ -170,32 +170,32 @@ object DataMunging extends SparkContextSupport {
         val din = disctrictMapBR.value.get(row.DistrictHash.get).get
         val t1 = row.Traffic1.get
         val t2 = row.Traffic2.get
-        val t3 = row.Traffic2.get
-        val t4 = row.Traffic2.get
+        val t3 = row.Traffic3.get
+        val t4 = row.Traffic4.get
         (ts * 100 + din) ->(t1, t2, t3, t4)
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
-
-      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
-      //fill traffic
-      for (din <- 1 to 66) {
-        for (i <- 1 to 144) {
-          val idx = i * 100 + din
-          if (traffic.contains(idx)) {
-            filledTraffic = traffic.get(idx).get
-          }
-        }
-        for (i <- 1 to 144) {
-          val idx = i * 100 + din
-          if (traffic.contains(idx)) {
-            filledTraffic = traffic.get(idx).get
-          } else {
-            traffic += idx -> filledTraffic
-          }
-        }
-      }
-      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
+//
+//      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
+//      //fill traffic
+//      for (din <- 1 to 66) {
+//        for (i <- 1 to 144) {
+//          val idx = i * 100 + din
+//          if (traffic.contains(idx)) {
+//            filledTraffic = traffic.get(idx).get
+//          }
+//        }
+//        for (i <- 1 to 144) {
+//          val idx = i * 100 + din
+//          if (traffic.contains(idx)) {
+//            filledTraffic = traffic.get(idx).get
+//          } else {
+//            traffic += idx -> filledTraffic
+//          }
+//        }
+//      }
+//      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
 
 
@@ -210,25 +210,25 @@ object DataMunging extends SparkContextSupport {
       println(s"\n===> WEATHER in ${f._4} via RDD#count call: ${weatherTable.count()}\n")
 
 
-      var weather: Map[Int, Tuple3[Int, Float, Float]] = weatherTable.map(row => {
+      var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
         row.ts ->(row.Weather.get, row.Temperature.get, row.Pollution.get)
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
 
-      var filledWeather: Tuple3[Int, Float, Float] = (0, 0, 0)
-      for (i <- 1 to 144) {
-        if (weather.contains(i)) {
-          filledWeather = weather.get(i).get
-        }
-      }
-      for (i <- 1 to 144) {
-        if (weather.contains(i)) {
-          filledWeather = weather.get(i).get
-        } else {
-          weather += i -> filledWeather
-        }
-      }
-      println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
+//      var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0)
+//      for (i <- 1 to 144) {
+//        if (weather.contains(i)) {
+//          filledWeather = weather.get(i).get
+//        }
+//      }
+//      for (i <- 1 to 144) {
+//        if (weather.contains(i)) {
+//          filledWeather = weather.get(i).get
+//        } else {
+//          weather += i -> filledWeather
+//        }
+//      }
+//      println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
 
 
 
@@ -320,7 +320,7 @@ object DataMunging extends SparkContextSupport {
               orders: Map[Int, Int],
               gaps: Map[Int, Int],
               traffic: Map[Int, Tuple4[Int, Int, Int, Int]],
-              weather: Map[Int, Tuple3[Int, Float, Float]],
+              weather: Map[Int, Tuple3[Int, Double, Double]],
               poi: Map[Int, Map[String, Int]]): Frame = {
 
     val len = headers.length
@@ -379,8 +379,8 @@ object DataMunging extends SparkContextSupport {
 
           if (weather.contains(ts)) {
             chunks(10).addNum(weather.get(ts).get._1)
-            chunks(11).addNum(weather.get(ts).get._1)
-            chunks(12).addNum(weather.get(ts).get._1)
+            chunks(11).addNum(weather.get(ts).get._2.toDouble)
+            chunks(12).addNum(weather.get(ts).get._3.toDouble)
           } else {
             chunks(10).addNA()
             chunks(11).addNA()

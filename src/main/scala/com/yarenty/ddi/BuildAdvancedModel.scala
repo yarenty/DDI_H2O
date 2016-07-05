@@ -270,4 +270,32 @@ object BuildAdvancedModel extends SparkContextSupport {
     drf.trainModel.get
 
   }
+
+//  buildModel 'deeplearning',
+  // {"model_id":"deeplearning-c93159b7-5e6a-4ab3-a841-ff44a1bc9d03",
+  // "training_frame":"day_2016_01_01.hex","validation_frame":"day_2016_01_22_test.hex",
+  // "nfolds":0,
+  // "response_column":"demand",
+  // "ignored_columns":["id","gap"],
+  // "ignore_const_cols":true,
+  // "activation":"Rectifier",
+  // "hidden":[50,50],"epochs":10,
+  // "variable_importances":false,
+  // "score_each_iteration":false,
+  // "checkpoint":"","use_all_factor_levels":true,"standardize":true,
+  // "train_samples_per_iteration":-2,"adaptive_rate":true,"input_dropout_ratio":0,
+  // "l1":0,"l2":0,
+  // "loss":"Automatic","distribution":"AUTO",
+  // "score_interval":5,"score_training_samples":10000,"score_validation_samples":0,"score_duty_cycle":0.1,
+  // "stopping_rounds":5,"stopping_metric":"AUTO","stopping_tolerance":0,"max_runtime_secs":0,
+  // "autoencoder":false,"pretrained_autoencoder":"","overwrite_with_best_model":true,
+  // "target_ratio_comm_to_comp":0.05,"seed":-5642090231507718000,"rho":0.99,"epsilon":1e-8,
+  // "max_w2":"Infinity","initial_weight_distribution":"UniformAdaptive","regression_stop":0.000001,
+  // "diagnostics":true,"fast_mode":true,"force_load_balance":true,"single_node_mode":false,
+  // "shuffle_training_data":false,"missing_values_handling":"MeanImputation","quiet_mode":false,
+  // "sparse":false,"col_major":false,"average_activation":0,"sparsity_beta":0,"max_categorical_features":2147483647,
+  // s"reproducible":false,"export_weights_and_biases":false,"mini_batch_size":1,"elastic_averaging":false}
+
+
 }
+

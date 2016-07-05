@@ -16,8 +16,8 @@ import water.parser.{DefaultParserProviders, ParseSetup}
   */
 class Weather(val ts: Int,
               val Weather: Option[Int],
-              val Temperature: Option[Float],
-              val Pollution: Option[Float]) extends Product with Serializable {
+              val Temperature: Option[Double],
+              val Pollution: Option[Double]) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Weather]
 
@@ -61,8 +61,8 @@ object WeatherParse extends Serializable {
 
 class WeatherIN(val Time: Option[String],
                 val Weather: Option[Int],
-                val Temperature: Option[Float],
-                val Pollution: Option[Float]) extends Product with Serializable {
+                val Temperature: Option[Double],
+                val Pollution: Option[Double]) extends Product with Serializable {
 
   override def canEqual(that: Any): Boolean = that.isInstanceOf[Weather]
 
@@ -95,8 +95,8 @@ object WeatherINParse extends Serializable {
     new WeatherIN(
       str(row(0)), // time
       int(row(1)), // wether: 1 night, 8 sunny, 4 rain etc.
-      float(row(2)), // temp
-      float(row(3)) // pollution
+      Option(row(2).trim().toDouble), // temp
+      Option(row(3).trim().toDouble) // pollution
     )
   }
 }
@@ -118,7 +118,7 @@ object WeatherCSVParser {
     //      chunk_size: 4194304
     val parseWeather: ParseSetup = new ParseSetup()
     val weatherNames: Array[String] = Array("Time", "Weather", "Temperature", "Pollution")
-    val weatherTypes = ParseSetup.strToColumnTypes(Array("string", "int", "float", "float"))
+    val weatherTypes = ParseSetup.strToColumnTypes(Array("string", "int", "double", "double"))
     parseWeather.setColumnNames(weatherNames)
     parseWeather.setColumnTypes(weatherTypes)
     parseWeather.setParseType(DefaultParserProviders.CSV_INFO)
