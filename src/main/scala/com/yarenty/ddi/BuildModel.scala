@@ -46,8 +46,8 @@ object BuildModel extends SparkContextSupport {
     for (p <- testset) addFiles(sc, absPath(test_imp_dir + p))
     for (i <- 1 to 21) addFiles(sc, absPath(train_imp_dir + "2016-01-" + "%02d".format(i)))
 
-    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("sm_" + a))).toSeq
-    val trainURIs = (1 to 21).map(a => new URI("file:///" + SparkFiles.get("sm_2016-01-" + "%02d".format(a)))).toSeq
+    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
+    val trainURIs = (1 to 21).map(a => new URI("file:///" + SparkFiles.get("day_2016-01-" + "%02d".format(a)))).toSeq
 
     // Use super-fast advanced H2O CSV parser !!!
     val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)

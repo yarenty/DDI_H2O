@@ -96,10 +96,12 @@ object DataMunging extends SparkContextSupport {
       val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
       var x = 21
 
-      out ++ a.map(pd => {
+    out ++ a.map(pd => {
         x += 1
         (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
       })
+
+
     }
 
 
@@ -356,6 +358,8 @@ object DataMunging extends SparkContextSupport {
           else {
             chunks(4).addNum(0)
           }
+
+
           if (gaps.contains(idx)) {
             chunks(5).addNum(gaps.get(idx).get)
           }

@@ -1,6 +1,7 @@
 package com.yarenty.ddi
 
 import com.yarenty.ddi.DataMunging._
+import com.yarenty.ddi.weather.{WeatherPredic, WeatherPrediction}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.h2o.H2OContext
@@ -43,11 +44,13 @@ object MLProcessor extends SparkContextSupport {
 
 
     //do munging stuff
-    DataMunging.process(h2oContext)
+   // WeatherPrediction.process(h2oContext)
+    WeatherPredic.process(h2oContext)
+//    DataMunging.process(h2oContext)
 
     // do modelling stuff
-    BuildAdvancedModel.process(h2oContext)
-
+    //BuildAdvancedModel.process(h2oContext)
+//    BuildModel.process(h2oContext)
     // Shutdown Spark cluster and H2O
     // h2oContext.stop(stopSparkContext = true)
 
