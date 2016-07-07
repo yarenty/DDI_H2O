@@ -7,6 +7,8 @@ import java.net.URI
 import com.yarenty.ddi.MLProcessor
 import com.yarenty.ddi.schemas.{OutputLine, SMOutputCSVParser}
 import hex.Distribution
+import hex.naivebayes.{NaiveBayesModel, NaiveBayes}
+import hex.naivebayes.NaiveBayesModel.NaiveBayesParameters
 import hex.tree.drf.DRFModel.DRFParameters
 import hex.tree.drf.{DRF, DRFModel}
 import hex.tree.gbm.GBMModel.GBMParameters
@@ -22,6 +24,7 @@ import water.support.SparkContextSupport
 import MLProcessor.h2oContext._
 import MLProcessor.h2oContext.implicits._
 import MLProcessor.sqlContext.implicits._
+
 /**
   * Created by yarenty on 30/06/2016.
   * (C)2015 SkyCorp Ltd.
@@ -61,9 +64,9 @@ object WeatherPredic extends SparkContextSupport {
     println(s"\n===> TEST: ${smOutputTest.numRows()}\n")
 
 
-    val weatherModel = gbmModel(smOutputTrain, smOutputTest)
-    val tempModel = gbmModel(smOutputTrain, smOutputTest)
-    val pollutionModel = gbmModel(smOutputTrain, smOutputTest)
+    val weatherModel = nbWeatherModel(smOutputTrain, smOutputTest)
+    // val tempModel = gbmModel(smOutputTrain, smOutputTest)
+    // val pollutionModel = gbmModel(smOutputTrain, smOutputTest)
 
     // SAVE THE MODEL!!!
     var om = new FileOutputStream("/opt/data/DRFWeatherPredictModel" + System.currentTimeMillis() + ".java")
@@ -72,13 +75,13 @@ object WeatherPredic extends SparkContextSupport {
 
     for (pu <- predictset) {
       val smOutputPredict = new h2o.H2OFrame(WPCSVParser.get, new URI("file:///" + SparkFiles.get("w_" + pu)))
-//      val predictTrainDemand = weatherModel.score(smOutputTest)
-//
-//      var vec = predictTrainDemand.get.lastVec
-//
-//      smOutputPredict.add("temp", vec)
-//
-//      saveOutput(smOutputPredict)
+      val predictTrainDemand = weatherModel.score(smOutputPredict)
+
+      //      var vec = predictTrainDemand.get.lastVec
+      //
+      //      smOutputPredict.add("temp", vec)
+      //
+      //      saveOutput(smOutputPredict)
 
 
     }
@@ -133,26 +136,36 @@ object WeatherPredic extends SparkContextSupport {
   }
 
 
-  def gbmModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): GBMModel = {
+  //  buildModel 'naivebayes',
+  // {"model_id":"naivebayes-4eca5924-44d7-41d3-9400-3ca7a8b872c1",
+  // "nfolds":0,"training_frame":"w_2016_01_01.hex",
+  // "validation_frame":"w_2016_01_22_test.hex",
+  // "response_column":"Weather",
+  // "ignored_columns":["Temp","Pollution"],
+  // "ignore_const_cols":false,
+  // "laplace":0,"min_sdev":0.001,
+  // "eps_sdev":0,"min_prob":0.001,"eps_prob":0,"compute_metrics":false,
+  // "score_each_iteration":false,"max_confusion_matrix_size":20,"
+  // max_hit_ratio_k":0,"max_runtime_secs":0,"seed":0}
 
-    val params = new GBMParameters()
+
+  def nbWeatherModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): NaiveBayesModel = {
+
+    val params = new NaiveBayesParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
-    params._ntrees = 100
-    params._response_column = "gap"
-    params._ignored_columns = Array("id")
+    params._response_column = "Weather"
+    params._ignored_columns = Array("Temp", "Pollution")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
-    val gbm = new GBM(params)
+    val nb = new NaiveBayes(params)
 
-    println("GBM:" + gbm)
+    println("NaiveBayes:" + nb)
 
-    gbm.trainModel.get
+    nb.trainModel.get
 
   }
-
-
 
 
 }
