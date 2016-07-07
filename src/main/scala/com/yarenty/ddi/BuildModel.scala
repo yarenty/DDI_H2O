@@ -113,7 +113,7 @@ object BuildModel extends SparkContextSupport {
       val n = p(p.length - 1)
 
       val csv = o.toCSV(true, false)
-      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/" + n + "_out2.csv"))
+      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/def" + n + ".csv"))
       while (csv.available() > 0) {
         csv_writer.write(csv.read.toChar)
       }
@@ -199,4 +199,20 @@ object BuildModel extends SparkContextSupport {
     drf.trainModel.get
 
   }
+
+  // here version of DL which works - no regularization as is already provided
+  // and batch set to 10
+  //
+  //buildModel 'deeplearning', {"model_id":"deeplearning-9c73716a-1790-4fa1-a116-79ffa8f93133",
+  // "training_frame":"train","validation_frame":"day_2016_01_22_test.hex",
+  // "nfolds":0,"response_column":"gap",
+  // "ignored_columns":["id","demand"],
+  // "ignore_const_cols":true,"activation":"Rectifier",
+  // "hidden":[200,200],"epochs":10,"
+  // variable_importances":false,"score_each_iteration":false,"checkpoint":"",
+  // "use_all_factor_levels":true,"standardize":false,
+  // "train_samples_per_iteration":-2,"adaptive_rate":true,"input_dropout_ratio":0,"l1":0,"l2":0,"loss":"Automatic","distribution":"gaussian","score_interval":5,"score_training_samples":10000,"score_validation_samples":0,"score_duty_cycle":0.1,"stopping_rounds":5,"stopping_metric":"AUTO","stopping_tolerance":0,"max_runtime_secs":0,"autoencoder":false,"pretrained_autoencoder":"","overwrite_with_best_model":true,"target_ratio_comm_to_comp":0.05,"seed":4474453303064774000,"rho":0.99,"epsilon":1e-8,"max_w2":"Infinity","initial_weight_distribution":"UniformAdaptive","regression_stop":0.000001,"diagnostics":true,"fast_mode":true,"force_load_balance":true,"single_node_mode":false,"shuffle_training_data":false,"missing_values_handling":"MeanImputation","quiet_mode":false,"sparse":false,"col_major":false,"average_activation":0,"sparsity_beta":0,"max_categorical_features":2147483647,"reproducible":false,"export_weights_and_biases":false,
+  // "mini_batch_size":"10","elastic_averaging":false}
+
+
 }

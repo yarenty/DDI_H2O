@@ -14,12 +14,14 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.{h2o, SparkContext, SparkFiles}
 import water.Key
 import water.fvec.{Vec, Frame}
+import water.parser.{ParseSetup, ParseDataset}
 import water.support.SparkContextSupport
 
 
 import MLProcessor.h2oContext._
 import MLProcessor.h2oContext.implicits._
 import MLProcessor.sqlContext.implicits._
+
 /**
   * Created by yarenty on 30/06/2016.
   * (C)2015 SkyCorp Ltd.
@@ -27,84 +29,104 @@ import MLProcessor.sqlContext.implicits._
 object BuildAdvancedModel extends SparkContextSupport {
 
 
-  val test_imp_dir = "/opt/data/season_1/outdata/day_"
-  val train_imp_dir = "/opt/data/season_1/outdata/day_"
+  val test_imp_dir = "/opt/data/season_1/outdatanorm/day_"
+  val train_imp_dir = "/opt/data/season_1/outdatanorm/day_"
 
 
-
-  def process(h2oContext:H2OContext) {
+  def process(h2oContext: H2OContext) {
 
     val sc = h2oContext.sparkContext
 
-
-
+    import h2oContext._
+    import h2oContext.implicits._
+    implicit val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
 
 
     println(s"\n\n LETS MODEL\n")
 
     val testset = Array("2016-01-22_test", "2016-01-26_test", "2016-01-30_test", "2016-01-28_test", "2016-01-24_test")
-    for (p <- testset) addFiles(sc, absPath(test_imp_dir + p))
-    for (i <- 1 to 21) addFiles(sc, absPath(train_imp_dir + "2016-01-" + "%02d".format(i)))
+    //val testset = Array("2016-01-22_test")
+    var trainset  = (1 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
 
+    for (p <- testset) addFiles(sc, absPath(test_imp_dir + p))
+    for (p <- trainset) addFiles(sc, absPath(train_imp_dir + p))
+
+    trainset  = (2 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
-    val trainURIs = (1 to 21).map(a => new URI("file:///" + SparkFiles.get("day_2016-01-" + "%02d".format(a)))).toSeq
+    val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_"+ a))).toSeq
 
     // Use super-fast advanced H2O CSV parser !!!
-    val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)
+    var smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, new URI("file:///" + SparkFiles.get("day_2016-01-01")))
+
+    var df = asDataFrame(smOutputTrain)
+
+    println(s" SIZE: ${df.count} ");
+    //1 by 1 to avoid OOM!
+    for (tu <- trainURIs) {
+
+      val tmp = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
+
+      df = df.unionAll(asDataFrame(tmp))
+      println(s" SIZE: ${df.count} ");
+
+    }
+    println(s" SIZE: ${df.count} ");
+
+
+    val outputTrain = asH2OFrame(df, "train")
+    outputTrain.colToEnum(Array("timeslice","districtID","destDistrict","weather"))
+
+    println(s" TRAIN DATA CREATED ");
+    //val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)
     val smOutputTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs: _*)
 
-    println(s"\n===> TRAIN: ${smOutputTrain.numRows()}\n")
+    smOutputTest.colToEnum(Array("timeslice","districtID","destDistrict","weather"))
+
+    println(s" TEST DATA CREATED ");
+
+    println(s"\n===> TRAIN: ${outputTrain.numRows()}\n")
     println(s"\n===> TEST: ${smOutputTest.numRows()}\n")
 
 
-    /*
-    val demandModel = drfDemandModel(smOutputTrain, smOutputTest)
-
+    val gapModel = drfGapOnlyModel(outputTrain, smOutputTest)
     // SAVE THE MODEL!!!
-    var om = new FileOutputStream("/opt/data/GRFDemandModel_" + System.currentTimeMillis() + ".java")
-    demandModel.toJava(om, false, false)
-
-    val predictTrainDemand = demandModel.score(smOutputTest)
-    var vec = predictTrainDemand.get.lastVec
-    smOutputTest.rename("demand","olddemand")
-    smOutputTest.add("demand",vec)
-    println("OUT VECTOR:" + vec.length)
-
-    smOutputTrain.add("olddemand", Vec.makeZero(smOutputTrain.numRows()))
-
-    saveDemandOutput(smOutputTest)
-
-
-    val gapModel = drfGapModel(smOutputTrain, smOutputTest)
-    // SAVE THE MODEL!!!
-    om = new FileOutputStream("/opt/data/GRFGAPModel_" + System.currentTimeMillis() + ".java")
+    val om = new FileOutputStream("/opt/data/GRFGAPOnlyModel_" + System.currentTimeMillis() + ".java")
     gapModel.toJava(om, false, false)
 
-    val predict = gapModel.score(smOutputTest)
-    vec = predict.get.lastVec
 
-    println("OUT VECTOR:" + vec.length)
 
-    smOutputTest.add("predict", vec)
 
-    saveOutput(smOutputTest)
+    for (u <- testURIs) {
 
-    smOutputTest.rename("olddemand","demand")
-*/
+      val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
 
-//      outFrame.delete()
-//      predict.delete()
-       // model.deviance()
+      predictMe.colToEnum(Array("timeslice","districtID","destDistrict","weather"))
+
+      val predict = gapModel.score(predictMe)
+      val vec = predict.get.lastVec
+
+      println("OUT VECTOR:" + vec.length)
+
+      predictMe.add("predict", vec)
+
+      saveOutput(predictMe,u.toString)
+
+    }
+
+
+    //      outFrame.delete()
+    //      predict.delete()
+    // model.deviance()
 
 
     println("=========> off to go!!!")
 
 
-
   }
 
 
-  def saveOutput(smOutputTest: H2OFrame): Unit = {
+  def saveOutput(smOutputTest: H2OFrame, fName:String): Unit = {
 
     import MLProcessor.sqlContext
     val names = Array("timeslice", "districtID", "gap", "predict")
@@ -125,30 +147,26 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     o.take(20).foreach(println)
 
-    val outTab = asRDD[OutputLine](o).collect()
+    val toSee = new H2OFrame(o)
 
-    //calculate error
-    var sum = 0.0d
-    outTab.foreach(x => {
-      sum += (x.predict.get - x.gap.get.toDouble).abs
-    })
+    println(s" output should be visible now ")
 
-    val error = sum / outTab.length
-
-    println("\nFINAL ERROR:" + error)
 
     //      val p = u.getPath.split("/")
     //      val n = p(p.length - 1)
 
+    val n = fName.split("/")
+    val name = n(n.length-1)
     val csv = o.toCSV(true, false)
-    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/all_out2.csv"))
+    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/"+name+".csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
     }
     csv_writer.close
+
+    println(s" CSV created: /opt/data/season_1/out/"+name+".csv")
+
   }
-
-
 
 
   def saveDemandOutput(smOutputTest: H2OFrame): Unit = {
@@ -236,7 +254,7 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     params._ntrees = 20
     params._response_column = "demand"
-    params._ignored_columns = Array("id","gap")
+    params._ignored_columns = Array("id", "gap")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -254,11 +272,11 @@ object BuildAdvancedModel extends SparkContextSupport {
     val params = new DRFParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
-   // params._distribution = Distribution.Family.gaussian
+    // params._distribution = Distribution.Family.gaussian
 
     params._ntrees = 20
     params._response_column = "gap"
-    params._ignored_columns = Array("id","olddemand")
+    params._ignored_columns = Array("id", "olddemand")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -271,7 +289,43 @@ object BuildAdvancedModel extends SparkContextSupport {
 
   }
 
-//  buildModel 'deeplearning',
+
+  //buildModel 'drf', {"model_id":"drf-82bdab1a-0ea4-4546-8b12-fe16dd84e33c",
+  // "training_frame":"train",
+  // "validation_frame":"day_2016_01_22_test.hex",
+  // "nfolds":0,"response_column":"gap","ignored_columns":["id","demand"],
+  // "ignore_const_cols":true,"ntrees":"100","max_depth":20,"min_rows":1,
+  // "nbins":20,"seed":-1,"mtries":-1,"sample_rate":0.6320000290870667,
+  // "score_each_iteration":false,"score_tree_interval":0,"nbins_top_level":1024,
+  // "nbins_cats":1024,"r2_stopping":0.999999,"stopping_rounds":0,"stopping_metric":"AUTO",
+  // "stopping_tolerance":0.001,"max_runtime_secs":0,"checkpoint":"","col_sample_rate_per_tree":1,
+  // "min_split_improvement":0,"histogram_type":"AUTO","build_tree_one_node":false,"sample_rate_per_class":[],
+  // "binomial_double_trees":false,"col_sample_rate_change_per_level":1}
+
+
+  def drfGapOnlyModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
+
+    val params = new DRFParameters()
+    params._train = smOutputTrain.key
+    params._valid = smOutputTest.key
+    // params._distribution = Distribution.Family.gaussian
+
+    params._ntrees = 20
+    params._response_column = "gap"
+    params._ignored_columns = Array("id", "demand")
+    params._ignore_const_cols = true
+
+    println("PARAMS:" + params)
+    val drf = new DRF(params)
+
+
+    println("DRF:" + drf)
+
+    drf.trainModel.get
+
+  }
+
+  //  buildModel 'deeplearning',
   // {"model_id":"deeplearning-c93159b7-5e6a-4ab3-a841-ff44a1bc9d03",
   // "training_frame":"day_2016_01_01.hex","validation_frame":"day_2016_01_22_test.hex",
   // "nfolds":0,

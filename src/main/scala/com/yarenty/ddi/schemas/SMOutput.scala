@@ -181,11 +181,11 @@ object SMOutputCSVParser {
       "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
       "21", "22", "23", "24", "25")
     val orderTypes = ParseSetup.strToColumnTypes(Array(
-      "int", "int", "int", "int", "int", "int",
-      "int", "int", "int", "int", "int", "float", "float",
-      "int", "int", "int", "int", "int", "int", "int", "int", "int", "int",
-      "int", "int", "int", "int", "int", "int", "int", "int", "int", "int",
-      "int", "int", "int", "int", "int"
+      "int", "enum", "enum", "enum", "int", "int",
+      "float", "float", "float", "float", "float", "float", "float",
+      "float", "float", "float", "float", "float", "float", "float", "float", "float", "float",
+      "float", "float", "float", "float", "float", "float", "float", "float", "float", "float",
+      "float", "float", "float", "float", "float"
     ))
     parse.setColumnNames(orderNames)
     parse.setColumnTypes(orderTypes)
