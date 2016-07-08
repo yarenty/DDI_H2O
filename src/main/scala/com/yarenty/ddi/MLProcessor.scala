@@ -42,8 +42,8 @@ object MLProcessor extends SparkContextSupport {
 
 
     // do modelling stuff
-    //BuildAdvancedModel.process(h2oContext)
-    BuildModel.process(h2oContext)
+    BuildAdvancedModel.process(h2oContext)
+    //BuildModel.process(h2oContext)
 
 
     // Shutdown Spark cluster and H2O

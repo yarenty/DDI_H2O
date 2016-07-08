@@ -5,6 +5,8 @@ import java.net.URI
 
 import com.yarenty.ddi.schemas.{OutputLine, SMOutputCSVParser}
 import hex.Distribution
+import hex.deeplearning.{DeepLearning, DeepLearningModel}
+import hex.deeplearning.DeepLearningModel.DeepLearningParameters
 import hex.tree.drf.DRFModel.DRFParameters
 import hex.tree.drf.{DRF, DRFModel}
 import hex.tree.gbm.GBMModel.GBMParameters
@@ -76,17 +78,29 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     val outputTrain = asH2OFrame(df, "train")
     outputTrain.colToEnum(Array("timeslice","districtID","destDistrict","weather"))
-
     println(s" TRAIN DATA CREATED ");
+
     //val smOutputTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs: _*)
     val smOutputTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs: _*)
-
     smOutputTest.colToEnum(Array("timeslice","districtID","destDistrict","weather"))
-
     println(s" TEST DATA CREATED ");
 
     println(s"\n===> TRAIN: ${outputTrain.numRows()}\n")
     println(s"\n===> TEST: ${smOutputTest.numRows()}\n")
+
+
+
+    val demandModel = dlDemandModel(outputTrain, smOutputTest)
+
+    val predictDemandT = demandModel.score(outputTrain)
+    val vecDemandT = predictDemandT.get.lastVec
+    outputTrain.add("pdemand", vecDemandT)
+
+    println(s" TRAIN Demand prediction created ");
+    val predictDemandV = demandModel.score(smOutputTest)
+    val vecDemandV = predictDemandV.get.lastVec
+    smOutputTrain.add("pdemand", vecDemandV)
+    println(s" TEST Demand prediction created ");
 
 
     val gapModel = drfGapOnlyModel(outputTrain, smOutputTest)
@@ -350,6 +364,61 @@ object BuildAdvancedModel extends SparkContextSupport {
   // "sparse":false,"col_major":false,"average_activation":0,"sparsity_beta":0,"max_categorical_features":2147483647,
   // s"reproducible":false,"export_weights_and_biases":false,"mini_batch_size":1,"elastic_averaging":false}
 
+
+
+  //buildModel 'deeplearning', {"model_id":"deeplearning-9c73716a-1790-4fa1-a116-79ffa8f93133",
+  // "training_frame":"train","validation_frame":"day_2016_01_22_test.hex",
+  // "nfolds":0,"response_column":"gap",
+  // "ignored_columns":["id","demand"],
+  // "ignore_const_cols":true,"activation":"Rectifier",
+  // "hidden":[200,200],"epochs":10,"
+  // variable_importances":false,"score_each_iteration":false,"checkpoint":"",
+  // "use_all_factor_levels":true,"standardize":false,
+  // "train_samples_per_iteration":-2,"adaptive_rate":true,"input_dropout_ratio":0,"l1":0,"l2":0,"loss":"Automatic","distribution":"gaussian","score_interval":5,"score_training_samples":10000,"score_validation_samples":0,"score_duty_cycle":0.1,"stopping_rounds":5,"stopping_metric":"AUTO","stopping_tolerance":0,"max_runtime_secs":0,"autoencoder":false,"pretrained_autoencoder":"","overwrite_with_best_model":true,"target_ratio_comm_to_comp":0.05,"seed":4474453303064774000,"rho":0.99,"epsilon":1e-8,"max_w2":"Infinity","initial_weight_distribution":"UniformAdaptive","regression_stop":0.000001,"diagnostics":true,"fast_mode":true,"force_load_balance":true,"single_node_mode":false,"shuffle_training_data":false,"missing_values_handling":"MeanImputation","quiet_mode":false,"sparse":false,"col_major":false,"average_activation":0,"sparsity_beta":0,"max_categorical_features":2147483647,"reproducible":false,"export_weights_and_biases":false,
+  // "mini_batch_size":"10","elastic_averaging":false}
+
+
+  // here version of DL which works - no regularization as is already provided
+  // and batch set to 10
+  //
+  //buildModel 'deeplearning', {"model_id":"deeplearning-9c73716a-1790-4fa1-a116-79ffa8f93133",
+  // "training_frame":"train","validation_frame":"day_2016_01_22_test.hex",
+  // "nfolds":0,"response_column":"gap",
+  // "ignored_columns":["id","demand"],
+  // "ignore_const_cols":true,"activation":"Rectifier",
+  // "hidden":[200,200],"epochs":10,"
+  // variable_importances":false,"score_each_iteration":false,"checkpoint":"",
+  // "use_all_factor_levels":true,"standardize":false,
+  // "train_samples_per_iteration":-2,"adaptive_rate":true,"input_dropout_ratio":0,"l1":0,"l2":0,"loss":"Automatic","distribution":"gaussian","score_interval":5,"score_training_samples":10000,"score_validation_samples":0,"score_duty_cycle":0.1,"stopping_rounds":5,"stopping_metric":"AUTO","stopping_tolerance":0,"max_runtime_secs":0,"autoencoder":false,"pretrained_autoencoder":"","overwrite_with_best_model":true,"target_ratio_comm_to_comp":0.05,"seed":4474453303064774000,"rho":0.99,"epsilon":1e-8,"max_w2":"Infinity","initial_weight_distribution":"UniformAdaptive","regression_stop":0.000001,"diagnostics":true,"fast_mode":true,"force_load_balance":true,"single_node_mode":false,"shuffle_training_data":false,"missing_values_handling":"MeanImputation","quiet_mode":false,"sparse":false,"col_major":false,"average_activation":0,"sparsity_beta":0,"max_categorical_features":2147483647,"reproducible":false,"export_weights_and_biases":false,
+  // "mini_batch_size":"10","elastic_averaging":false}
+
+
+
+
+
+
+  def dlDemandModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DeepLearningModel = {
+
+    val params = new DeepLearningParameters()
+    params._train = smOutputTrain.key
+    params._valid = smOutputTest.key
+    params._distribution = Distribution.Family.gaussian
+
+    //params._hidden = [200,200]
+    params._response_column = "demand"
+    params._ignored_columns = Array("id","gap")
+    params._ignore_const_cols = true
+    params._standardize = false
+
+    println("PARAMS:" + params)
+    val drf = new DeepLearning(params)
+
+
+    println("DRF:" + drf)
+
+    drf.trainModel.get
+
+  }
 
 }
 
