@@ -57,6 +57,9 @@ object BuildModel extends SparkContextSupport {
     println(s"\n===> TEST: ${smOutputTest.numRows()}\n")
 
 
+    smOutputTrain.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
+    smOutputTest.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
+
     val model = drfModel(smOutputTrain, smOutputTest)
 
     // SAVE THE MODEL!!!
@@ -113,7 +116,7 @@ object BuildModel extends SparkContextSupport {
       val n = p(p.length - 1)
 
       val csv = o.toCSV(true, false)
-      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/def" + n + ".csv"))
+      val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/drf_" + n + "_notnorm.csv"))
       while (csv.available() > 0) {
         csv_writer.write(csv.read.toChar)
       }
@@ -138,9 +141,9 @@ object BuildModel extends SparkContextSupport {
     val params = new GBMParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
-    params._ntrees = 100
+    params._ntrees = 10
     params._response_column = "gap"
-    params._ignored_columns = Array("id")
+    params._ignored_columns = Array("id","demand","weather")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -185,9 +188,9 @@ object BuildModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._distribution = Distribution.Family.gaussian
 
-    params._ntrees = 50
+    params._ntrees = 10
     params._response_column = "gap"
-    params._ignored_columns = Array("id")
+    params._ignored_columns = Array("id","demand","weather")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)

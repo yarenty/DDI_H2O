@@ -178,26 +178,26 @@ object DataMunging extends SparkContextSupport {
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
-      //
-      //      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
-      //      //fill traffic
-      //      for (din <- 1 to 66) {
-      //        for (i <- 1 to 144) {
-      //          val idx = i * 100 + din
-      //          if (traffic.contains(idx)) {
-      //            filledTraffic = traffic.get(idx).get
-      //          }
-      //        }
-      //        for (i <- 1 to 144) {
-      //          val idx = i * 100 + din
-      //          if (traffic.contains(idx)) {
-      //            filledTraffic = traffic.get(idx).get
-      //          } else {
-      //            traffic += idx -> filledTraffic
-      //          }
-      //        }
-      //      }
-      //      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
+
+      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
+      //fill traffic
+      for (din <- 1 to 66) {
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            filledTraffic = traffic.get(idx).get
+          }
+        }
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            filledTraffic = traffic.get(idx).get
+          } else {
+            traffic += idx -> filledTraffic
+          }
+        }
+      }
+      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
 
       val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
@@ -209,7 +209,11 @@ object DataMunging extends SparkContextSupport {
 
 
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
-        row.ts ->(row.Weather.get, row.Temperature.get, row.Pollution.get)
+        row.ts ->(
+          row.Weather.get,
+          if (row.Temperature.get < 0) 0.0 else row.Temperature.get, //test set has -6 while train always +
+          row.Pollution.get)
+
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
 
@@ -341,11 +345,7 @@ object DataMunging extends SparkContextSupport {
           chunks(0).addNum(idx)
           chunks(1).addNum(ts)
           chunks(2).addNum(din)
-          if (dout == 0) {
-            chunks(3).addNA()
-          } else {
-            chunks(3).addNum(dout)
-          }
+          chunks(3).addNum(dout)
 
           if (orders.contains(idx)) {
             chunks(4).addNum(orders.get(idx).get)

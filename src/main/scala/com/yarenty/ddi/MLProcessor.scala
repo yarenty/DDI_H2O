@@ -37,13 +37,12 @@ object MLProcessor extends SparkContextSupport {
     // WeatherPrediction.process(h2oContext)
     // WeatherPredic.process(h2oContext)
 
-    //  DataMunging.process(h2oContext)
+    //DataMunging.process(h2oContext)
+    // BuildModel.process(h2oContext)
+
     //NormalizedDataMunging.process(h2oContext)
-
-
-    // do modelling stuff
     BuildAdvancedModel.process(h2oContext)
-    //BuildModel.process(h2oContext)
+
 
 
     // Shutdown Spark cluster and H2O

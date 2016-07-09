@@ -9,6 +9,7 @@ import water.fvec._
 
 import scala.collection.mutable
 import scala.collection.mutable.HashMap
+
 //import org.apache.spark.{SparkFiles, h2o, SparkContext}
 //import org.apache.spark.h2o.{RDD, H2OFrame, DoubleHolder, H2OContext}
 import com.yarenty.ddi.schemas._
@@ -36,7 +37,7 @@ object NormalizedDataMunging extends SparkContextSupport {
   var weather_csv = ""
 
 
-  def process(h2oContext:H2OContext) {
+  def process(h2oContext: H2OContext) {
 
     import h2oContext._
     import h2oContext.implicits._
@@ -58,8 +59,8 @@ object NormalizedDataMunging extends SparkContextSupport {
     println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
 
     //  Use H2O to RDD transformation
-//    val poiTable = poiData.vecs()
-//    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
+    //    val poiTable = poiData.vecs()
+    //    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
 
 
     val poi: Map[Int, Map[String, Int]] = asRDD[POI](poiData).map(row => {
@@ -91,7 +92,7 @@ object NormalizedDataMunging extends SparkContextSupport {
       val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
       var x = 21
 
-    out ++ a.map(pd => {
+      out ++ a.map(pd => {
         x += 1
         (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
       })
@@ -116,7 +117,7 @@ object NormalizedDataMunging extends SparkContextSupport {
       val orderData = new h2o.H2OFrame(OrderCSVParser.get,
         new File(SparkFiles.get("order_data_" + PROCESSED_DAY))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> ORDERS via H2O#Frame#count: ${orderData.numRows()}\n")
-      val orderTable = asRDD[Order](orderData)       //  Use H2O to RDD transformation
+      val orderTable = asRDD[Order](orderData) //  Use H2O to RDD transformation
       println(s"\n===> ORDERS in ${f._2} via RDD#count call: ${orderTable.count()}\n")
 
 
@@ -152,7 +153,7 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
       val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
-        new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY)))  // Use super-fast advanced H2O CSV parser !!!
+        new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
       val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
@@ -192,13 +193,12 @@ object NormalizedDataMunging extends SparkContextSupport {
           }
         }
       }
-      val normFactor=1000.0
-      val normalizedTraffic:Map[Int, Tuple4[Double,Double,Double,Double]] =  traffic.mapValues(x =>
-        (x._1.toDouble/normFactor, x._2.toDouble/normFactor,x._3.toDouble/normFactor,x._4.toDouble/normFactor)
+      val normFactor = 1000.0
+      val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.mapValues(x =>
+        (x._1.toDouble / normFactor, x._2.toDouble / normFactor, x._3.toDouble / normFactor, x._4.toDouble / normFactor)
 
       )
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
-
 
 
 
@@ -213,11 +213,14 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
-        row.ts ->(row.Weather.get, row.Temperature.get, row.Pollution.get)
+        row.ts ->(
+          row.Weather.get, // not important - train doesnt have some values
+          (20.0 + row.Temperature.get)/40.0, // need to normalize as test data have values outside train!!
+          row.Pollution.get)
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
 
-      var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0)  //after doing naive bayes - this looks much better ;-)
+      var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0) //after doing naive bayes - this looks much better ;-)
       for (i <- 1 to 144) {
         if (weather.contains(i)) {
           filledWeather = weather.get(i).get
@@ -317,13 +320,12 @@ object NormalizedDataMunging extends SparkContextSupport {
   }
 
 
-
   def lineBuilder(headers: Array[String], types: Array[Byte],
-              orders: Map[Int, Int],
-              gaps: Map[Int, Int],
-              traffic: Map[Int, Tuple4[Double,Double,Double,Double]],
-              weather: Map[Int, Tuple3[Int, Double, Double]],
-              poi: Map[Int, Map[String, Double]]): Frame = {
+                  orders: Map[Int, Int],
+                  gaps: Map[Int, Int],
+                  traffic: Map[Int, Tuple4[Double, Double, Double, Double]],
+                  weather: Map[Int, Tuple3[Int, Double, Double]],
+                  poi: Map[Int, Map[String, Double]]): Frame = {
 
     val len = headers.length
 
@@ -432,7 +434,7 @@ object NormalizedDataMunging extends SparkContextSupport {
     *
     * @param disctrictMapBR
     * @param row
-    * @return    (DisctrictID -> Map [Category, HowMany]])
+    * @return (DisctrictID -> Map [Category, HowMany]])
     */
   def getPOIMap(disctrictMapBR: Broadcast[mutable.HashMap[String, Int]], row: POI): (Int, Map[String, Int]) = {
     val iter = row.productIterator
@@ -494,12 +496,12 @@ object NormalizedDataMunging extends SparkContextSupport {
       val old = row._2
       var now: Map[String, Double] = Map[String, Double]()
 
-      val normalization:Array[Double] = Array(0.0,
-        86071.0/12.0,30544.0/13.0,6640.0/6.0,152803.0/18.0,21165.0/5.0,
-        61005.0/5.0,35026.0/4.0,91217.0/6.0, 1.0, 25.0,      //#9 not exist
-        419980.0/9.0,166.0,85739.0/6.0,40172.0/10.0,141515.0/9.0,
-        152056.0/13.0,105410.0/6.0,83.0,502731.0/6.0,678110.0/10.0,
-        830.0/3.0,34445.0/7.0,32619.0/7.0,490198.0/4.0,60839.0/10.0
+      val normalization: Array[Double] = Array(0.0,
+        86071.0 / 12.0, 30544.0 / 13.0, 6640.0 / 6.0, 152803.0 / 18.0, 21165.0 / 5.0,
+        61005.0 / 5.0, 35026.0 / 4.0, 91217.0 / 6.0, 1.0, 25.0, //#9 not exist
+        419980.0 / 9.0, 166.0, 85739.0 / 6.0, 40172.0 / 10.0, 141515.0 / 9.0,
+        152056.0 / 13.0, 105410.0 / 6.0, 83.0, 502731.0 / 6.0, 678110.0 / 10.0,
+        830.0 / 3.0, 34445.0 / 7.0, 32619.0 / 7.0, 490198.0 / 4.0, 60839.0 / 10.0
       )
       for (i <- 1 to 25) {
         var tmp = 0
@@ -513,7 +515,7 @@ object NormalizedDataMunging extends SparkContextSupport {
             tmp += old.get(id).get
           }
         }
-        now += (s"${i}" -> (tmp.toDouble/normalization(i)) )
+        now += (s"${i}" -> (tmp.toDouble / normalization(i)))
       }
 
       idx -> now
