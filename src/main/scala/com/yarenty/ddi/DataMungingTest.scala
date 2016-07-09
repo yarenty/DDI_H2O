@@ -1,4 +1,4 @@
-package com.yarenty.ddi.normalized
+package com.yarenty.ddi
 
 import java.io.{File, PrintWriter}
 
@@ -22,12 +22,12 @@ import water.support.SparkContextSupport
   * Created by yarenty on 23/06/2016.
   * (C)2015 SkyCorp Ltd.
   */
-object NormalizedDataMunging extends SparkContextSupport {
+object DataMungingTest extends SparkContextSupport {
 
 
   var PROCESSED_DAY = "2016-01-01"
   val data_dir = "/opt/data/season_1/"
-  val output_dir = "/opt/data/season_1/outdatanorm/day_"
+  val output_dir = "/opt/data/season_1/outdata/day_"
 
 
   val cluster_csv = data_dir + "test_set_1/cluster_map/cluster_map"
@@ -68,7 +68,7 @@ object NormalizedDataMunging extends SparkContextSupport {
     }).collect().toMap
 
 
-    val mergedPOI: Map[Int, Map[String, Double]] = mergePOI(poi)
+    val mergedPOI: Map[Int, Map[String, Int]] = mergePOI(poi)
 
     for (m <- mergedPOI) {
       println(m)
@@ -80,11 +80,22 @@ object NormalizedDataMunging extends SparkContextSupport {
       traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
       weather_csv = data_dir + "training_data/weather_data/weather_data_"
 
-//      val out: Seq[Tuple4[String, String, String, String]] =
+      val out: Seq[Tuple4[String, String, String, String]] =
         (1 to 21).map(i => {
           val pd = "2016-01-" + "%02d".format(i)
           (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
         }).toSeq
+
+      order_csv = data_dir + "test_set_1/order_data/order_data_"
+      traffic_csv = data_dir + "test_set_1/traffic_data/traffic_data_"
+      weather_csv = data_dir + "test_set_1/weather_data/weather_data_"
+      val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
+      var x = 21
+
+      out ++ a.map(pd => {
+        x += 1
+        (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
+      })
 
 
     }
@@ -182,14 +193,7 @@ object NormalizedDataMunging extends SparkContextSupport {
           }
         }
       }
-      val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.mapValues(x =>
-        (x._1.toDouble / 2000.0, x._2.toDouble / 1000.0, x._3.toDouble / 400.0, x._4.toDouble / 200.0)
-
-      )
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
-
-
-
 
 
       val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
@@ -202,9 +206,10 @@ object NormalizedDataMunging extends SparkContextSupport {
 
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
         row.ts ->(
-          row.Weather.get, // not important - train doesnt have some values
-          (20.0 + row.Temperature.get)/40.0, // need to normalize as test data have values outside train!!
-          row.Pollution.get / 100.0)
+          row.Weather.get,
+          if (row.Temperature.get < 0) 0.0 else row.Temperature.get, //test set has -6 while train always +
+          row.Pollution.get)
+
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
 
@@ -266,7 +271,7 @@ object NormalizedDataMunging extends SparkContextSupport {
       val myData = new h2o.H2OFrame(lineBuilder(headers, types,
         orders,
         gaps,
-        normalizedTraffic,
+        traffic,
         weather,
         mergedPOI)) //poi
 
@@ -311,9 +316,9 @@ object NormalizedDataMunging extends SparkContextSupport {
   def lineBuilder(headers: Array[String], types: Array[Byte],
                   orders: Map[Int, Int],
                   gaps: Map[Int, Int],
-                  traffic: Map[Int, Tuple4[Double, Double, Double, Double]],
+                  traffic: Map[Int, Tuple4[Int, Int, Int, Int]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
-                  poi: Map[Int, Map[String, Double]]): Frame = {
+                  poi: Map[Int, Map[String, Int]]): Frame = {
 
     val len = headers.length
 
@@ -336,12 +341,7 @@ object NormalizedDataMunging extends SparkContextSupport {
           chunks(0).addNum(idx)
           chunks(1).addNum(ts)
           chunks(2).addNum(din)
-          if (dout == 0) {
-            //chunks(3).addNA()  - is not really unknown as its just outside city
-            chunks(3).addNum(0)
-          } else {
-            chunks(3).addNum(dout)
-          }
+          chunks(3).addNum(dout)
 
           if (orders.contains(idx)) {
             chunks(4).addNum(orders.get(idx).get)
@@ -422,7 +422,7 @@ object NormalizedDataMunging extends SparkContextSupport {
     *
     * @param disctrictMapBR
     * @param row
-    * @return (DisctrictID -> Map [Category, HowMany])
+    * @return (DisctrictID -> Map [Category, HowMany]])
     */
   def getPOIMap(disctrictMapBR: Broadcast[mutable.HashMap[String, Int]], row: POI): (Int, Map[String, Int]) = {
     val iter = row.productIterator
@@ -447,30 +447,6 @@ object NormalizedDataMunging extends SparkContextSupport {
     din -> m
   }
 
-  //      "1", "1#1", "1#2", "1#3", "1#4", "1#5", "1#6", "1#7", "1#8", "1#9", "1#10", "1#11",
-  //      "2#1", "2#2", "2#3", "2#4", "2#5", "2#6", "2#7", "2#8", "2#9", "2#10", "2#11", "2#12", "2#13",
-  //      "3", "3#1", "3#2", "3#3", "3#4", "3#5",
-  //      "4", "4#1", "4#2", "4#3", "4#4", "4#5", "4#6", "4#7", "4#8", "4#9", "4#10", "4#11", "4#12", "4#13", "4#14", "4#15", "4#16", "4#17", "4#18",
-  //      "5", "5#1", "5#2", "5#3", "5#4",
-  //      "6", "6#1", "6#2", "6#3", "6#4",
-  //      "7", "7#1", "7#2", "7#3",
-  //      "8", "8#1", "8#2", "8#3", "8#4", "8#5",
-  //      "10#1",
-  //      "11", "11#1", "11#2", "11#3", "11#4", "11#5", "11#6", "11#7", "11#8",
-  //      "12",
-  //      "13#1", "13#3", "13#4", "13#5", "13#6", "13#8",
-  //      "14", "14#1", "14#2", "14#3", "14#4", "14#5", "14#6", "14#7", "14#8", "14#9", "14#10",
-  //      "15", "15#1", "15#2", "15#3", "15#4", "15#5", "15#6", "15#7", "15#8",
-  //      "16", "16#1", "16#2", "16#3", "16#4", "16#5", "16#6", "16#7", "16#8", "16#9", "16#10", "16#11", "16#12",
-  //      "17", "17#1", "17#2", "17#3", "17#4", "17#5",
-  //      "18",
-  //      "19", "19#1", "19#2", "19#3", "19#4",
-  //      "20", "20#1", "20#2", "20#3", "20#4", "20#5", "20#6", "20#7", "20#8", "20#9",
-  //      "21#1", "21#2", "21#4",
-  //      "22", "22#1", "22#2", "22#3", "22#4", "22#5", "22#6",
-  //      "23", "23#1", "23#2", "23#3", "23#4", "23#5", "23#6",
-  //      "24", "24#1", "24#2", "24#3",
-  //      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
   /**
     * Extremely simple PCA ;-)
     * Merge all POI sub categories into simple 1.
@@ -478,19 +454,12 @@ object NormalizedDataMunging extends SparkContextSupport {
     * @param poi
     * @return
     */
-  def mergePOI(poi: Map[Int, Map[String, Int]]): Map[Int, Map[String, Double]] = {
+  def mergePOI(poi: Map[Int, Map[String, Int]]): Map[Int, Map[String, Int]] = {
     poi.map(row => {
       val idx = row._1
       val old = row._2
-      var now: Map[String, Double] = Map[String, Double]()
+      var now: Map[String, Int] = Map[String, Int]()
 
-      val normalization: Array[Double] = Array(0.0,
-        86071.0 / 12.0, 30544.0 / 13.0, 6640.0 / 6.0, 152803.0 / 18.0, 21165.0 / 5.0,
-        61005.0 / 5.0, 35026.0 / 4.0, 91217.0 / 6.0, 1.0, 25.0, //#9 not exist
-        419980.0 / 9.0, 166.0, 85739.0 / 6.0, 40172.0 / 10.0, 141515.0 / 9.0,
-        152056.0 / 13.0, 105410.0 / 6.0, 83.0, 502731.0 / 6.0, 678110.0 / 10.0,
-        830.0 / 3.0, 34445.0 / 7.0, 32619.0 / 7.0, 490198.0 / 4.0, 60839.0 / 10.0
-      )
       for (i <- 1 to 25) {
         var tmp = 0
         val im = s"${i}"
@@ -503,7 +472,7 @@ object NormalizedDataMunging extends SparkContextSupport {
             tmp += old.get(id).get
           }
         }
-        now += (s"${i}" -> (tmp.toDouble / normalization(i)))
+        now += (s"${i}" -> tmp)
       }
 
       idx -> now
@@ -562,7 +531,7 @@ object NormalizedDataMunging extends SparkContextSupport {
       districtMap += (row(0) -> row(1).trim.toInt)
     }).count()
     println(s"===> DistrictMap size:: ${districtMap.value.size} ")
-    //    districtMap.value.foreach { case (k, v) => println(s" ${k} => ${v}") }
+    districtMap.value.foreach { case (k, v) => println(" \""+k + "\" -> "+v+",") }
     districtMap.value
   }
 }

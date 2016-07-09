@@ -22,7 +22,7 @@ import water.support.SparkContextSupport
   * Created by yarenty on 23/06/2016.
   * (C)2015 SkyCorp Ltd.
   */
-object NormalizedDataMunging extends SparkContextSupport {
+object NormalizedDataMungingTest extends SparkContextSupport {
 
 
   var PROCESSED_DAY = "2016-01-01"
@@ -76,15 +76,16 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
     val files = {
-      order_csv = data_dir + "training_data/order_data/order_data_"
-      traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
-      weather_csv = data_dir + "training_data/weather_data/weather_data_"
+      order_csv = data_dir + "test_set_1/order_data/order_data_"
+      traffic_csv = data_dir + "outtraffic/t_"
+      weather_csv = data_dir + "test_set_1/weather_data/weather_data_"
+      val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
+      var x = 21
 
-//      val out: Seq[Tuple4[String, String, String, String]] =
-        (1 to 21).map(i => {
-          val pd = "2016-01-" + "%02d".format(i)
-          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
-        }).toSeq
+      a.map(pd => {
+        x += 1
+        (pd, order_csv + pd, traffic_csv + pd+"_all", weather_csv + pd)
+      })
 
 
     }
@@ -141,49 +142,46 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
 
-      val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
-        new File(SparkFiles.get("traffic_data_" + PROCESSED_DAY))) // Use super-fast advanced H2O CSV parser !!!
+      val trafficData = new h2o.H2OFrame(TCSVParser.get,
+        new File(SparkFiles.get("t_" + PROCESSED_DAY+ "_all"))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
-      val trafficTable: h2o.RDD[Traffic] = asRDD[TrafficIN](trafficData)
-        .map(row => TrafficParse(row))
-        .filter(!_.isWrongRow())
+      val trafficTable: h2o.RDD[PTraffic] = asRDD[PTraffic](trafficData)
       println(s"\n===> TRAFFIC in ${f._3} via RDD#count call: ${trafficTable.count()}\n")
 
-
-      var traffic: Map[Int, Tuple4[Int, Int, Int, Int]] = trafficTable.map(row => {
-        val ts = getTimeSlice(row.Time.get)
-        if (ts < 1) println(s" WRONG TIME: ${row.Time} ")
-        val din = disctrictMapBR.value.get(row.DistrictHash.get).get
-        val t1 = row.Traffic1.get
-        val t2 = row.Traffic2.get
-        val t3 = row.Traffic3.get
-        val t4 = row.Traffic4.get
+      var traffic: Map[Int, Tuple4[Double, Double, Double, Double]] = trafficTable.map(row => {
+        val ts = row.timeslice.get
+        val din = row.district.get
+        val t1 = if (row.t1.isEmpty) row.t1p.get else row.t1.get
+        val t2 = if (row.t2.isEmpty) row.t2p.get else row.t2.get
+        val t3 = if (row.t3.isEmpty) row.t3p.get else row.t3.get
+        val t4 = if (row.t4.isEmpty) row.t4p.get else row.t4.get
         (ts * 100 + din) ->(t1, t2, t3, t4)
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
-
-      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
-      //fill traffic
-      for (din <- 1 to 66) {
-        for (i <- 1 to 144) {
-          val idx = i * 100 + din
-          if (traffic.contains(idx)) {
-            filledTraffic = traffic.get(idx).get
-          }
-        }
-        for (i <- 1 to 144) {
-          val idx = i * 100 + din
-          if (traffic.contains(idx)) {
-            filledTraffic = traffic.get(idx).get
-          } else {
-            traffic += idx -> filledTraffic
-          }
-        }
-      }
+//
+//      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
+//      //fill traffic
+//      for (din <- 1 to 66) {
+//        for (i <- 1 to 144) {
+//          val idx = i * 100 + din
+//          if (traffic.contains(idx)) {
+//            filledTraffic = traffic.get(idx).get
+//          }
+//        }
+//        for (i <- 1 to 144) {
+//          val idx = i * 100 + din
+//          if (traffic.contains(idx)) {
+//            filledTraffic = traffic.get(idx).get
+//          } else {
+//            traffic += idx -> filledTraffic
+//          }
+//        }
+//      }
+      //val normFactor = 1000.0
       val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.mapValues(x =>
-        (x._1.toDouble / 2000.0, x._2.toDouble / 1000.0, x._3.toDouble / 400.0, x._4.toDouble / 200.0)
+        (x._1.toDouble / 2000.0, x._2.toDouble / 1000.0, x._3.toDouble / 400.0 , x._4.toDouble / 200.0)
 
       )
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
@@ -422,7 +420,7 @@ object NormalizedDataMunging extends SparkContextSupport {
     *
     * @param disctrictMapBR
     * @param row
-    * @return (DisctrictID -> Map [Category, HowMany])
+    * @return (DisctrictID -> Map [Category, HowMany]])
     */
   def getPOIMap(disctrictMapBR: Broadcast[mutable.HashMap[String, Int]], row: POI): (Int, Map[String, Int]) = {
     val iter = row.productIterator

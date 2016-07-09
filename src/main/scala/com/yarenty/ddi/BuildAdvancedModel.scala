@@ -47,7 +47,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     println(s"\n\n LETS MODEL\n")
 
 
-    val testset = Array(22,24,26,28,30).map(i => "2016-01-" + "%02d".format(i)).toArray
+    val testset = Array(22,24,26,28,30).map(i => "2016-01-" + "%02d".format(i) + "_test").toArray
     for (p <- testset) addFiles(sc, absPath(data_dir + p))
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
     var tmpTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs(0))
@@ -59,7 +59,7 @@ object BuildAdvancedModel extends SparkContextSupport {
       dfTest = dfTest.unionAll(asDataFrame(tmp))
       println(s" SIZE: ${dfTest.count} ")
     }
-    val testData = asH2OFrame(dfTest)
+    val testData = asH2OFrame(dfTest,"test")
 
 
     val trainset  = (1 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
@@ -74,7 +74,7 @@ object BuildAdvancedModel extends SparkContextSupport {
       dfTrain = dfTrain.unionAll(asDataFrame(tmp))
       println(s" SIZE: ${dfTrain.count} ")
     }
-    val trainData = asH2OFrame(dfTrain)
+    val trainData = asH2OFrame(dfTrain,"train")
 
 
     trainData.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
@@ -104,7 +104,8 @@ object BuildAdvancedModel extends SparkContextSupport {
 
 
 
-    val gapModel = drfGapOnlyModel(trainData, testData)
+    val gapModel = drfGapModel(trainData, testData)
+//    val gapModel = dlGapModel(trainData, testData)
     // SAVE THE MODEL!!!
     val om = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".java")
     gapModel.toJava(om, false, false)
@@ -188,7 +189,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand","weather")
+    params._ignored_columns = Array("id","demand","weather","temp")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -228,15 +229,19 @@ object BuildAdvancedModel extends SparkContextSupport {
 
 
 
-  def drfGapOnlyModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
+  def drfGapModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
 
     val params = new DRFParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
 
+    params._ntrees = 20  //@todo remove
     params._response_column = "gap"
     params._ignored_columns = Array("id", "demand", "weather")
     params._ignore_const_cols = true
+    params._nbins = 100
+    params._max_depth = 50
+
 
     println("PARAMS:" + params.fullName)
     val drf = new DRF(params)
@@ -261,21 +266,21 @@ object BuildAdvancedModel extends SparkContextSupport {
   // "mini_batch_size":"10","elastic_averaging":false}
 
 
-  def dlDemandModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DeepLearningModel = {
+  def dlGapModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DeepLearningModel = {
 
     val params = new DeepLearningParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._distribution = Distribution.Family.gaussian
-    params._response_column = "demand"
-    params._ignored_columns = Array("id", "gap","weather")
+    params._response_column = "gap"
+    params._ignored_columns = Array("id", "demand", "weather")
     params._ignore_const_cols = true
-    params._standardize = false
+    //params._standardize = false
 
     //@TODO: removeme  (do bigger stuff)
-    params._hidden = Array(40,40)
+//    params._hidden = Array(50,50)
     params._mini_batch_size = 10
-    params._epochs = 1.0
+    params._epochs = 5.0
 
     println("PARAMS:" + params.fullName)
     val drf = new DeepLearning(params)

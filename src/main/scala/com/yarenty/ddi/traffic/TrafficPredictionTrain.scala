@@ -1,24 +1,20 @@
 package com.yarenty.ddi.traffic
 
-import java.io.{PrintWriter, File}
-
+import java.io.{File, PrintWriter}
 
 import com.yarenty.ddi.schemas._
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.{SparkFiles, h2o}
 import org.apache.spark.h2o.H2OContext
 import org.apache.spark.sql.SQLContext
-import water.{Key, Futures}
-import water.fvec.{Vec, NewChunk, AppendableVec, Frame}
+import org.apache.spark.{SparkFiles, h2o}
+import water.fvec.{AppendableVec, Frame, NewChunk, Vec}
 import water.support.SparkContextSupport
-
-import scala.collection.mutable
+import water.{Futures, Key}
 
 /**
   * Created by yarenty on 06/07/2016.
   * (C)2015 SkyCorp Ltd.
   */
-object TrafficPrediction extends SparkContextSupport {
+object TrafficPredictionTrain extends SparkContextSupport {
 
   val data_dir = "/opt/data/season_1/"
   val output_dir = "/opt/data/season_1/outtraffic/t_2016-01-"
@@ -106,8 +102,6 @@ object TrafficPrediction extends SparkContextSupport {
     import h2oContext.implicits._
     val sc = h2oContext.sparkContext
     implicit val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
-
 
 
 
@@ -115,28 +109,22 @@ object TrafficPrediction extends SparkContextSupport {
     val poiData = new h2o.H2OFrame(new File(SparkFiles.get("poi_data")))
     println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
     val poi: Map[Int, Map[String, Int]] = asRDD[POI](poiData).map(row => {
-      getPOIMap(districts, row)
+      TrafficPrediction.getPOIMap(districts, row)
     }).collect().toMap
-    val mergedPOI: Map[Int, Map[String, Int]] = mergePOI(poi)
+    val mergedPOI: Map[Int, Map[String, Int]] = TrafficPrediction.mergePOI(poi)
     for (m <- mergedPOI) {
       println(m)
     }
 
-
-
     val files = {
 
+      traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
       weather_csv = data_dir + "outweather/w_"
 
-      traffic_csv = data_dir + "test_set_1/traffic_data/traffic_data_"
-      val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
-      var x = 20
-
-      // out ++
-      a.map(pd => {
-        x += 2
-        (x, traffic_csv + pd,weather_csv + pd, pd )
-      })
+              (1 to 21).map(i => {
+                val pd = "2016-01-" + "%02d".format(i)
+                (i, traffic_csv + pd, weather_csv + pd, pd)
+              })
 
 
 
@@ -178,6 +166,26 @@ object TrafficPrediction extends SparkContextSupport {
 
 
 
+      var filledTraffic: Tuple7[Int,Int,Int,Int, Int, Int, Int] = (0, 0, 0, 0,0,0,0)
+      //fill traffic
+      for (din <- 1 to 66) {
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            filledTraffic = traffic.get(idx).get
+          }
+        }
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            filledTraffic = traffic.get(idx).get
+          } else {
+            traffic += idx -> filledTraffic
+          }
+        }
+      }
+      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
+
       val weatherData = new h2o.H2OFrame(WCVSParser.get,
          new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
        println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
@@ -189,8 +197,8 @@ object TrafficPrediction extends SparkContextSupport {
        var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
          row.timeslice.get ->(
            row.timeslice.get,
-           (20.0 + row.temp.get)/40.0,
-           row.pollution.get/100.0)
+           row.temp.get,
+           row.pollution.get)
        }).collect().toMap
        println(s" WEATHER MAP SIZE: ${weather.size}")
 
@@ -216,7 +224,6 @@ object TrafficPrediction extends SparkContextSupport {
         "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
         "21", "22", "23", "24", "25"
       )
-
 
       val out = new h2o.H2OFrame(lineBuilder(headers, traffic, weather, mergedPOI, PROCESSED_DAY))
 
@@ -301,7 +308,6 @@ object TrafficPrediction extends SparkContextSupport {
 
           }
         }
-
       }
 
     for (i <- 0 until len) {
@@ -325,77 +331,5 @@ object TrafficPrediction extends SparkContextSupport {
   def getTimeSlice(t: String): Int = {
     val tt = t.split(" ")(1).split(":")
     return ((tt(0).toInt * 60 * 60 + tt(1).toInt * 60 + tt(2).toInt) / (10 * 60)) + 1
-  }
-
-
-
-
-  /**
-    * Return map of POIs .
-    *
-    * @param disctrictMapBR
-    * @param row
-    * @return (DisctrictID -> Map [Category, HowMany]])
-    */
-  def getPOIMap(disctrictMapBR: Map[String, Int], row: POI): (Int, Map[String, Int]) = {
-    val iter = row.productIterator
-    val district: String = iter.next match {
-      case None => ""
-      case Some(value) => value.toString // value is of type String
-    }
-
-    val din: Int = disctrictMapBR.get(district).get
-    var m: Map[String, Int] = Map[String, Int]()
-    while (iter.hasNext) {
-      val col = iter.next match {
-        case None => ""
-        case Some(value) => value.toString // value is of type String
-      }
-
-      if (!col.isEmpty && col != "") {
-        val v = col.split(":")
-        m += (v(0) -> v(1).toInt)
-      }
-    }
-    din -> m
-  }
-
-  /**
-    * Extremely simple PCA ;-)
-    * Merge all POI sub categories into simple 1.
-    *
-    * @param poi
-    * @return
-    */
-  def mergePOI(poi: Map[Int, Map[String, Int]]): Map[Int, Map[String, Double]] = {
-    poi.map(row => {
-      val idx = row._1
-      val old = row._2
-      var now: Map[String, Double] = Map[String, Double]()
-
-      val normalization: Array[Double] = Array(0.0,
-        86071.0 / 12.0, 30544.0 / 13.0, 6640.0 / 6.0, 152803.0 / 18.0, 21165.0 / 5.0,
-        61005.0 / 5.0, 35026.0 / 4.0, 91217.0 / 6.0, 1.0, 25.0, //#9 not exist
-        419980.0 / 9.0, 166.0, 85739.0 / 6.0, 40172.0 / 10.0, 141515.0 / 9.0,
-        152056.0 / 13.0, 105410.0 / 6.0, 83.0, 502731.0 / 6.0, 678110.0 / 10.0,
-        830.0 / 3.0, 34445.0 / 7.0, 32619.0 / 7.0, 490198.0 / 4.0, 60839.0 / 10.0
-      )
-      for (i <- 1 to 25) {
-        var tmp = 0
-        val im = s"${i}"
-        if (old.contains(im)) {
-          tmp += old.get(im).get
-        }
-        for (j <- 1 to 20) {
-          val id = s"${i}#${j}"
-          if (old.contains(id)) {
-            tmp += old.get(id).get
-          }
-        }
-        now += (s"${i}" -> (tmp.toDouble / normalization(i)))
-      }
-
-      idx -> now
-    })
   }
 }

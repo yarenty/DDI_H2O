@@ -46,15 +46,15 @@ object ShortNormModel extends SparkContextSupport {
 //    val trainset  = ((1 to 20)++testset).map(i => "2016-01-" + "%02d".format(i)).toArray
 
     //@TODO: test/present mode
-    val testset = Array(22)
-    val trainset = ((1 to 1) ++ testset).map(i => "2016-01-" + "%02d".format(i)).toArray
+    val testset = Array("2016-01-22_test")
+    val trainset = Array("2016-01-01") ++ testset
 
 
     addFiles(sc, absPath(data_dir + "2016-01-21"))
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
 
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
-    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_2016-01-" + "%02d".format(a)))).toSeq
+    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_"+a))).toSeq
     // Use super-fast advanced H2O CSV parser !!!
     //last will be first ;-)
     var tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, new URI("file:///" + SparkFiles.get("day_2016-01-21")))

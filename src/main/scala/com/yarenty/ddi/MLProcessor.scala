@@ -1,7 +1,8 @@
 package com.yarenty.ddi
 
 import com.yarenty.ddi.DataMunging._
-import com.yarenty.ddi.normalized.NormalizedDataMunging
+import com.yarenty.ddi.normalized.{NormalizedDataMungingTest, NormalizedDataMunging}
+import com.yarenty.ddi.traffic.{TrafficPredic, TrafficPrediction}
 import com.yarenty.ddi.weather.{WeatherPredic, WeatherPrediction}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
@@ -31,18 +32,21 @@ object MLProcessor extends SparkContextSupport {
 
     println(s"\n\n H2O CONTEXT is TOO !!!!!!\n")
 
-
-    //do munging stuff
-
-    // WeatherPrediction.process(h2oContext)
-    // WeatherPredic.process(h2oContext)
-
-    //DataMunging.process(h2oContext)
-    // BuildModel.process(h2oContext)
-
-    //NormalizedDataMunging.process(h2oContext)
+//    WeatherPrediction.process(h2oContext)
+//    WeatherPredic.process(h2oContext)
+//
+    //   TrafficPredictionTrain.process(h2oContext)
+    //   TrafficPredictionTest.process(h2oContext)
+    //   TrafficPrediction.process(h2oContext)
+//    TrafficPredic.process(h2oContext)
+//
+//    DataMunging.process(h2oContext)
+//    BuildModel.process(h2oContext)
+//
+//    NormalizedDataMunging.process(h2oContext)
+//    NormalizedDataMungingTest.process(h2oContext)
     BuildAdvancedModel.process(h2oContext)
-
+//    ShortNormModel.process(h2oContext)
 
 
     // Shutdown Spark cluster and H2O

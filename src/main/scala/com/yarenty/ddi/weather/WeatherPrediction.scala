@@ -18,7 +18,7 @@ import water.support.SparkContextSupport
 object WeatherPrediction extends SparkContextSupport {
 
   val data_dir = "/opt/data/season_1/"
-  val output_dir = "/opt/data/season_1/outdata/w_2016-01-"
+  val output_dir = "/opt/data/season_1/outweather/w_2016-01-"
 
   var weather_csv = ""
 
