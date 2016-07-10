@@ -80,11 +80,11 @@ object NormalizedDataMungingTest extends SparkContextSupport {
       traffic_csv = data_dir + "outtraffic/t_"
       weather_csv = data_dir + "test_set_1/weather_data/weather_data_"
       val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
-      var x = 21
+      var x = 20
 
       a.map(pd => {
-        x += 1
-        (pd, order_csv + pd, traffic_csv + pd+"_all", weather_csv + pd)
+        x += 2
+        (pd, order_csv + pd, traffic_csv + pd+"_all", weather_csv + pd, x)
       })
 
 
@@ -113,14 +113,19 @@ object NormalizedDataMungingTest extends SparkContextSupport {
 
 
       //get number of demand drives
-      val orders: Map[Int, Int] = orderTable.map(row => {
-        val timeslice = getTimeSlice(row.Time.get)
-        var from = disctrictMapBR.value.get(row.StartDH.get)
-        var to = disctrictMapBR.value.get(row.DestDH.get)
-        if (to == None) to = Option(0)
-        val indx = getIndex(timeslice, from.get, to.get)
-        indx
-      }).groupBy(identity).mapValues(_.size).collect().toMap
+//      val orders: Map[Int, Int] = orderTable.map(row => {
+//        val timeslice = getTimeSlice(row.Time.get)
+//        var from = disctrictMapBR.value.get(row.StartDH.get)
+//        var to = disctrictMapBR.value.get(row.DestDH.get)
+//        if (to == None) to = Option(0)
+//        val indx = getIndex(timeslice, from.get, to.get)
+//        indx
+//      }).groupBy(identity).mapValues(_.size).collect().toMap
+
+
+      val orders : Map[Int,Int] = (1 to 144).map( i =>
+        i -> f._5 % 7
+      ).toMap
 
       //get number of gap drives (did not happen)
       val gaps: Map[Int, Int] = orderTable.map(row => {
@@ -149,6 +154,8 @@ object NormalizedDataMungingTest extends SparkContextSupport {
       val trafficTable: h2o.RDD[PTraffic] = asRDD[PTraffic](trafficData)
       println(s"\n===> TRAFFIC in ${f._3} via RDD#count call: ${trafficTable.count()}\n")
 
+
+      //@TODO: add traffic window!
       var traffic: Map[Int, Tuple4[Double, Double, Double, Double]] = trafficTable.map(row => {
         val ts = row.timeslice.get
         val din = row.district.get
@@ -306,7 +313,7 @@ object NormalizedDataMungingTest extends SparkContextSupport {
 
 
   def lineBuilder(headers: Array[String], types: Array[Byte],
-                  orders: Map[Int, Int],
+                  dayOfWeek: Map[Int, Int],
                   gaps: Map[Int, Int],
                   traffic: Map[Int, Tuple4[Double, Double, Double, Double]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
@@ -340,8 +347,8 @@ object NormalizedDataMungingTest extends SparkContextSupport {
             chunks(3).addNum(dout)
           }
 
-          if (orders.contains(idx)) {
-            chunks(4).addNum(orders.get(idx).get)
+          if (dayOfWeek.contains(ts)) {
+            chunks(4).addNum(dayOfWeek.get(ts).get)
           }
           else {
             chunks(4).addNum(0)

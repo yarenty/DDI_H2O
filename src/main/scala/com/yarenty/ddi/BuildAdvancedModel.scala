@@ -77,8 +77,8 @@ object BuildAdvancedModel extends SparkContextSupport {
     val trainData = asH2OFrame(dfTrain,"train")
 
 
-    trainData.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
-    testData.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
+    trainData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
+    testData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
 
     println(s" TRAIN/TEST DATA CREATED ");
 
@@ -113,7 +113,7 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     for (u <- testURIs) {
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
-      predictMe.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
+      predictMe.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
 
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec
@@ -147,7 +147,7 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     odf.registerTempTable("out")
 
-    val a = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.2,cast(0.0 as double), predict) as predict from out")
+    val a = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.5,cast(0.0 as double), predict) as predict from out")
     a.registerTempTable("gaps")
     val o = sqlContext.sql(" select timeslice, districtID, sum(gap) as gap, sum(predict) as predict from gaps " +
       "  group by timeslice,districtID")
@@ -190,7 +190,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand","weather","temp")
+    params._ignored_columns = Array("id","weather","temp")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -236,12 +236,12 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
 
-    params._ntrees = 20  //@todo remove
+    params._ntrees = 10  //@todo remove
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "demand", "weather")
+    params._ignored_columns = Array("id", "weather")    //demand is day of week
     params._ignore_const_cols = true
-    params._nbins = 100
-    params._max_depth = 50
+//    params._nbins = 100
+//    params._max_depth = 50
 
 
     println("PARAMS:" + params.fullName)
@@ -274,7 +274,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._distribution = Distribution.Family.gaussian
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "demand", "weather")
+    params._ignored_columns = Array("id", "weather")
     params._ignore_const_cols = true
     //params._standardize = false
 

@@ -163,7 +163,7 @@ object TrafficPredictionTrain extends SparkContextSupport {
         val t2 = row.Traffic2.get
         val t3 = row.Traffic3.get
         val t4 = row.Traffic4.get
-        ts * 100 + din ->(PROCESSED_DAY, din, ts, t1, t2, t3, t4)
+        ts * 100 + din ->(PROCESSED_DAY % 7, din, ts, t1, t2, t3, t4)
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
@@ -286,7 +286,7 @@ object TrafficPredictionTrain extends SparkContextSupport {
           chunks(7).addNum(weather.get(ts).get._2)
           chunks(8).addNum(weather.get(ts).get._3)
         } else {
-          chunks(0).addNum(pd)
+          chunks(0).addNum(pd % 7)
           chunks(1).addNum(din)
           chunks(2).addNum(ts)
           chunks(3).addNA()

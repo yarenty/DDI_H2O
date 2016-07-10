@@ -53,8 +53,8 @@ object TrafficPredic extends SparkContextSupport {
     val smOutputTrain = new h2o.H2OFrame(TPCSVParser.get, trainURIs: _*)
     val smOutputTest = new h2o.H2OFrame(TPCSVParser.get, testURIs: _*)
 
-    smOutputTrain.colToEnum(Array("timeslice", "district"))
-    smOutputTest.colToEnum(Array("timeslice", "district"))
+    smOutputTrain.colToEnum(Array("day","timeslice", "district"))
+    smOutputTest.colToEnum(Array("day","timeslice", "district"))
 
 
 
@@ -72,7 +72,7 @@ object TrafficPredic extends SparkContextSupport {
 
     for (pu <- predictset) {
       val smOutputPredict = new h2o.H2OFrame(TPCSVParser.get, new URI("file:///" + SparkFiles.get("t_" + pu)))
-      smOutputPredict.colToEnum(Array("timeslice", "district"))
+      smOutputPredict.colToEnum(Array("day","timeslice", "district"))
       val predictT1Demand = t1Model.score(smOutputPredict)
       var vecT1 = predictT1Demand.get.lastVec
       smOutputPredict.add("t1p", vecT1)

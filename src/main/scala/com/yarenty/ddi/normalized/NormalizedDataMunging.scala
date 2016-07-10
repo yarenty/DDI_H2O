@@ -83,7 +83,7 @@ object NormalizedDataMunging extends SparkContextSupport {
 //      val out: Seq[Tuple4[String, String, String, String]] =
         (1 to 21).map(i => {
           val pd = "2016-01-" + "%02d".format(i)
-          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
+          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd, i)
         }).toSeq
 
 
@@ -112,14 +112,18 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
       //get number of demand drives
-      val orders: Map[Int, Int] = orderTable.map(row => {
-        val timeslice = getTimeSlice(row.Time.get)
-        var from = disctrictMapBR.value.get(row.StartDH.get)
-        var to = disctrictMapBR.value.get(row.DestDH.get)
-        if (to == None) to = Option(0)
-        val indx = getIndex(timeslice, from.get, to.get)
-        indx
-      }).groupBy(identity).mapValues(_.size).collect().toMap
+//      val orders: Map[Int, Int] = orderTable.map(row => {
+//        val timeslice = getTimeSlice(row.Time.get)
+//        var from = disctrictMapBR.value.get(row.StartDH.get)
+//        var to = disctrictMapBR.value.get(row.DestDH.get)
+//        if (to == None) to = Option(0)
+//        val indx = getIndex(timeslice, from.get, to.get)
+//        indx
+//      }).groupBy(identity).mapValues(_.size).collect().toMap
+
+      val orders : Map[Int,Int] = (1 to 144).map( i =>
+        i -> f._5 % 7
+      ).toMap
 
       //get number of gap drives (did not happen)
       val gaps: Map[Int, Int] = orderTable.map(row => {
@@ -308,7 +312,7 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
   def lineBuilder(headers: Array[String], types: Array[Byte],
-                  orders: Map[Int, Int],
+                  dayOfWeek: Map[Int, Int],
                   gaps: Map[Int, Int],
                   traffic: Map[Int, Tuple4[Double, Double, Double, Double]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
@@ -342,8 +346,8 @@ object NormalizedDataMunging extends SparkContextSupport {
             chunks(3).addNum(dout)
           }
 
-          if (orders.contains(idx)) {
-            chunks(4).addNum(orders.get(idx).get)
+          if (dayOfWeek.contains(ts)) {
+            chunks(4).addNum(dayOfWeek.get(ts).get)
           }
           else {
             chunks(4).addNum(0)

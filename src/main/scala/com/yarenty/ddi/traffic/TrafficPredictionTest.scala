@@ -179,7 +179,7 @@ object TrafficPredictionTest extends SparkContextSupport {
         val t2 = row.Traffic2.get
         val t3 = row.Traffic3.get
         val t4 = row.Traffic4.get
-        ts * 100 + din ->(PROCESSED_DAY, din, ts, t1, t2, t3, t4)
+        ts * 100 + din ->(PROCESSED_DAY % 7, din, ts, t1, t2, t3, t4)
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 

@@ -44,8 +44,8 @@ object MLProcessor extends SparkContextSupport {
 //    BuildModel.process(h2oContext)
 //
 //    NormalizedDataMunging.process(h2oContext)
-//    NormalizedDataMungingTest.process(h2oContext)
-    BuildAdvancedModel.process(h2oContext)
+    NormalizedDataMungingTest.process(h2oContext)
+//    BuildAdvancedModel.process(h2oContext)
 //    ShortNormModel.process(h2oContext)
 
 
