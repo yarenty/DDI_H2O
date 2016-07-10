@@ -14,8 +14,9 @@ import hex.tree.drf.{DRF, DRFModel}
 import hex.tree.gbm.GBMModel.GBMParameters
 import hex.tree.gbm.{GBM, GBMModel}
 import org.apache.spark.h2o.{H2OContext, H2OFrame}
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.{SparkFiles, h2o}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.{SparkContext, SparkFiles, h2o}
 import water.Key
 import water.fvec.Frame
 import water.support.SparkContextSupport
@@ -123,7 +124,7 @@ object ShortNormModel extends SparkContextSupport {
 
       println("OUT VECTOR:" + vec.length)
       predictMe.add("predict", vec)
-      saveOutput(predictMe, u.toString)
+      saveOutput(predictMe, u.toString,sc)
     }
     println("=========> off to go!!!")
   }
@@ -133,7 +134,7 @@ object ShortNormModel extends SparkContextSupport {
 
 
 
-  def saveOutput(smOutputTest: H2OFrame, fName: String): Unit = {
+  def saveOutput(smOutputTest: H2OFrame, fName: String, sc: SparkContext): Unit = {
 
     import MLProcessor.sqlContext
     val names = Array("timeslice", "districtID", "gap", "predict")
@@ -145,6 +146,8 @@ object ShortNormModel extends SparkContextSupport {
 
 
     val odf = asDataFrame(zz)
+
+
     val o = odf.groupBy("timeslice", "districtID").agg(Map(
       "gap" -> "sum",
       "predict" -> "sum"
@@ -154,13 +157,16 @@ object ShortNormModel extends SparkContextSupport {
 
     o.take(20).foreach(println)
 
+//    val f = new RDD(sc,o)
     val toSee = new H2OFrame(o)
 
     println(s" output should be visible now ")
 
     val n = fName.split("/")
     val name = n(n.length - 1)
-    val csv = o.toCSV(true, false)
+
+    val csv = o.toCSV(false, false)
+
     val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/" + name + ".csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
@@ -238,9 +244,11 @@ object ShortNormModel extends SparkContextSupport {
     params._response_column = "gap"
     params._ignored_columns = Array("id", "demand", "weather")
     params._ignore_const_cols = true
+    params._ntrees = 20
 
     println("PARAMS:" + params.fullName)
     val drf = new DRF(params)
+
 
     println("DRF:" + drf)
     drf.trainModel.get

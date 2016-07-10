@@ -143,14 +143,15 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     val zz = new h2o.H2OFrame(out)
 
-
     val odf = asDataFrame(zz)
-    val o = odf.groupBy("timeslice", "districtID").agg(Map(
-      "gap" -> "sum",
-      "predict" -> "sum"
-    ))
-    o.rename("sum(gap)", "gap")
-    o.rename("sum(predict)", "predict")
+
+    odf.registerTempTable("out")
+
+    val a = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.2,cast(0.0 as double), predict) as predict from out")
+    a.registerTempTable("gaps")
+    val o = sqlContext.sql(" select timeslice, districtID, sum(gap) as gap, sum(predict) as predict from gaps " +
+      "  group by timeslice,districtID")
+
 
     o.take(20).foreach(println)
 
@@ -161,7 +162,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     val n = fName.split("/")
     val name = n(n.length - 1)
     val csv = o.toCSV(true, false)
-    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + ".csv"))
+    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + "_full.csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
     }
