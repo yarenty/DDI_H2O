@@ -2,6 +2,7 @@ package com.yarenty.ddi.traffic
 
 import java.io.{File, PrintWriter}
 
+import com.yarenty.ddi.DataMunging._
 import com.yarenty.ddi.schemas._
 import org.apache.spark.h2o.H2OContext
 import org.apache.spark.sql.SQLContext
@@ -103,7 +104,9 @@ object TrafficPredictionTrain extends SparkContextSupport {
     val sc = h2oContext.sparkContext
     implicit val sqlContext = new SQLContext(sc)
 
-
+    addFiles(h2oContext.sparkContext,
+      absPath(poi_csv)
+    )
 
     // Use super-fast advanced H2O CSV parser !!!
     val poiData = new h2o.H2OFrame(new File(SparkFiles.get("poi_data")))
@@ -111,7 +114,7 @@ object TrafficPredictionTrain extends SparkContextSupport {
     val poi: Map[Int, Map[String, Int]] = asRDD[POI](poiData).map(row => {
       TrafficPrediction.getPOIMap(districts, row)
     }).collect().toMap
-    val mergedPOI: Map[Int, Map[String, Int]] = TrafficPrediction.mergePOI(poi)
+    val mergedPOI: Map[Int, Map[String, Double]] = TrafficPrediction.mergePOI(poi)
     for (m <- mergedPOI) {
       println(m)
     }
@@ -165,7 +168,6 @@ object TrafficPredictionTrain extends SparkContextSupport {
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
 
-
       var filledTraffic: Tuple7[Int,Int,Int,Int, Int, Int, Int] = (0, 0, 0, 0,0,0,0)
       //fill traffic
       for (din <- 1 to 66) {
@@ -186,6 +188,10 @@ object TrafficPredictionTrain extends SparkContextSupport {
       }
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
+      val normalizedTraffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]] = traffic.map(x =>
+       x._1 ->  ( x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
+      )
+
       val weatherData = new h2o.H2OFrame(WCVSParser.get,
          new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
        println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
@@ -197,8 +203,8 @@ object TrafficPredictionTrain extends SparkContextSupport {
        var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
          row.timeslice.get ->(
            row.timeslice.get,
-           row.temp.get,
-           row.pollution.get)
+           (20.0 + row.temp.get) / 40.0,
+           row.pollution.get / 100.0)
        }).collect().toMap
        println(s" WEATHER MAP SIZE: ${weather.size}")
 
@@ -225,7 +231,7 @@ object TrafficPredictionTrain extends SparkContextSupport {
         "21", "22", "23", "24", "25"
       )
 
-      val out = new h2o.H2OFrame(lineBuilder(headers, traffic, weather, mergedPOI, PROCESSED_DAY))
+      val out = new h2o.H2OFrame(lineBuilder(headers, normalizedTraffic, weather, mergedPOI, PROCESSED_DAY))
 
       val csv = out.toCSV(true, false)
 
@@ -244,9 +250,9 @@ object TrafficPredictionTrain extends SparkContextSupport {
   }
 
   def lineBuilder(headers: Array[String],
-                  traffic: Map[Int, Tuple7[Int, Int, Int, Int, Int, Int, Int]],
+                  traffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]],
                   weather:Map[Int, Tuple3[Int, Double, Double]],
-                  poi: Map[Int, Map[String, Int]],
+                  poi: Map[Int, Map[String, Double]],
                   pd: Int): Frame = {
 
     val len = headers.length

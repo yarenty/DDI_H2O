@@ -15,7 +15,7 @@ object TPCSVParser {
         "21", "22", "23", "24", "25"
       )
       val trafficTypes = ParseSetup.strToColumnTypes(Array(
-        "int", "int", "int", "int", "int", "int", "int", "double", "double"
+        "int", "int", "int", "int", "int", "int", "int", "double", "double",
         "int", "int", "int", "int", "int", "int", "int", "int", "int",
         "int", "int", "int", "int", "int", "int", "int", "int","int", "int",
       "int", "int", "int", "int", "int"

@@ -2,7 +2,7 @@ package com.yarenty.ddi
 
 import com.yarenty.ddi.DataMunging._
 import com.yarenty.ddi.normalized.{NormalizedDataMungingTest, NormalizedDataMunging}
-import com.yarenty.ddi.traffic.{TrafficPredic, TrafficPrediction}
+import com.yarenty.ddi.traffic.{TrafficPredictionTrain, TrafficPredictionTest, TrafficPredic, TrafficPrediction}
 import com.yarenty.ddi.weather.{WeatherPredic, WeatherPrediction}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
@@ -35,9 +35,9 @@ object MLProcessor extends SparkContextSupport {
 //    WeatherPrediction.process(h2oContext)
 //    WeatherPredic.process(h2oContext)
 //
-    //   TrafficPredictionTrain.process(h2oContext)
-    //   TrafficPredictionTest.process(h2oContext)
-    //   TrafficPrediction.process(h2oContext)
+//    TrafficPredictionTrain.process(h2oContext)
+//    TrafficPredictionTest.process(h2oContext)
+//    TrafficPrediction.process(h2oContext)
 //    TrafficPredic.process(h2oContext)
 //
 //    DataMunging.process(h2oContext)

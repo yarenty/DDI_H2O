@@ -182,9 +182,8 @@ object NormalizedDataMunging extends SparkContextSupport {
           }
         }
       }
-      val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.mapValues(x =>
-        (x._1.toDouble / 2000.0, x._2.toDouble / 1000.0, x._3.toDouble / 400.0, x._4.toDouble / 200.0)
-
+      val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.map(x =>
+       x._1 ->  (x._2._1.toDouble / 2000.0, x._2._2.toDouble / 1000.0, x._2._3.toDouble / 400.0, x._2._4.toDouble / 200.0)
       )
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
