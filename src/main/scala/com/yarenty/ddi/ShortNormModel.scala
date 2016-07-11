@@ -84,7 +84,7 @@ object ShortNormModel extends SparkContextSupport {
     val gapModel = drfGapOnlyModel(trainData, testData)
 
     val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex_very_simple")
-    val ab = new AutoBuffer (omab,true)
+    val ab = new AutoBuffer(omab,true)
     gapModel.write(ab)
     ab.close()
     println("MODEL saved!")
@@ -115,10 +115,7 @@ object ShortNormModel extends SparkContextSupport {
 
     val key = Key.make("output").asInstanceOf[Key[Frame]]
     val out = new Frame(key, names, smOutputTest.vecs(names))
-
     val zz = new h2o.H2OFrame(out)
-
-
     val odf = asDataFrame(zz)
 
 
@@ -128,26 +125,20 @@ object ShortNormModel extends SparkContextSupport {
     ))
     o.rename("sum(gap)", "gap")
     o.rename("sum(predict)", "predict")
-
     o.take(20).foreach(println)
-
-//    val f = new RDD(sc,o)
     val toSee = new H2OFrame(o)
-
     println(s" output should be visible now ")
 
     val n = fName.split("/")
     val name = n(n.length - 1)
-
     val csv = o.toCSV(false, false)
-
-    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/" + name + ".csv"))
+    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/short_" + name + ".csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
     }
     csv_writer.close
 
-    println(s" CSV created: /opt/data/season_1/out/" + name + "_full.csv")
+    println(s" CSV created: /opt/data/season_1/out/short_" + name + ".csv")
 
   }
 

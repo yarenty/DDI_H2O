@@ -40,10 +40,6 @@ object WeatherPredic extends SparkContextSupport {
 
     val sc = h2oContext.sparkContext
 
-
-
-
-
     println(s"\n\n LETS MODEL\n")
     val predictset = Array("2016-01-22_predict", "2016-01-26_predict", "2016-01-30_predict", "2016-01-28_predict", "2016-01-24_predict")
 

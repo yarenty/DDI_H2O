@@ -27,10 +27,7 @@ object OutputFileMerger extends SparkContextSupport {
 
     import h2oContext.implicits._
     implicit val sqlContext = new SQLContext(sc)
-
-
-    println(s"\n\n LETS MODEL\n")
-
+    println(s"Merge output files.")
 
     val outset = Array(22, 24, 26, 28, 30).map(i => "2016-01-" + "%02d".format(i) + "_test.csv").toArray
     for (p <- outset) addFiles(sc, absPath(data_dir + p))
@@ -38,7 +35,6 @@ object OutputFileMerger extends SparkContextSupport {
 
     val tmpTrain = new h2o.H2OFrame(OutputCSVParser.get, outURIs(0))
     var dfTrain = asDataFrame(tmpTrain)
-    // dfTrain.add("day",Ve)
 
     //1 by 1 to avoid OOM!
     for (tu <- outURIs.drop(1)) {
@@ -48,7 +44,7 @@ object OutputFileMerger extends SparkContextSupport {
 
     saveOutput(dfTrain)
 
-
+    println("FINAL FILE delivered")
   }
 
   def saveOutput(output: H2OFrame): Unit = {

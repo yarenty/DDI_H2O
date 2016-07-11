@@ -74,7 +74,7 @@ object WeatherPrediction extends SparkContextSupport {
       println(s"\n===> WEATHER in ${f._2} via RDD#count call: ${weatherTable.count()}\n")
 
       //: Map[Int, Tuple4[Int,Int, Double, Double]]
-      var weather = weatherTable.map(row => {
+      val weather = weatherTable.map(row => {
         row.ts ->(PROCESSED_DAY, row.ts, row.Weather.get, row.Temperature.get, row.Pollution.get)
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")

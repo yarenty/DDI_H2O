@@ -52,11 +52,12 @@ object PredictModel extends SparkContextSupport {
     val gapModel = new DRFModel(null, null, null)
     println("loading...")
 
-    val omab = new FileInputStream("/opt/data/season_1/out_263/DRFGapModel_1468242944125.hex")
+    val omab = new FileInputStream("/opt/data/DRFGapModel_1468245928478.hex_very_simple")
     val ab = new AutoBuffer(omab)
     gapModel.read(ab)
+    //gapModel
     println("MODEL LOADED")
-    ab.close()
+   // ab.close()
     println("finally...")
 
 
@@ -73,6 +74,7 @@ object PredictModel extends SparkContextSupport {
     }
     println("=========> off to go!!!")
 
+    ab.close()
 
   }
 

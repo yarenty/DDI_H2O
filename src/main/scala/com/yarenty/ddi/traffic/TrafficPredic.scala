@@ -110,19 +110,6 @@ object TrafficPredic extends SparkContextSupport {
   }
 
 
-  //  buildModel 'naivebayes',
-  // {"model_id":"naivebayes-4eca5924-44d7-41d3-9400-3ca7a8b872c1",
-  // "nfolds":0,"training_frame":"w_2016_01_01.hex",
-  // "validation_frame":"w_2016_01_22_test.hex",
-  // "response_column":"Weather",
-  // "ignored_columns":["Temp","Pollution"],
-  // "ignore_const_cols":false,
-  // "laplace":0,"min_sdev":0.001,
-  // "eps_sdev":0,"min_prob":0.001,"eps_prob":0,"compute_metrics":false,
-  // "score_each_iteration":false,"max_confusion_matrix_size":20,"
-  // max_hit_ratio_k":0,"max_runtime_secs":0,"seed":0}
-
-
   def glmT1Model(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
 
     val params = new DRFParameters()
