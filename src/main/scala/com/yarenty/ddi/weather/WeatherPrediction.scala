@@ -2,7 +2,8 @@ package com.yarenty.ddi.weather
 
 import java.io.{PrintWriter, File}
 
-import com.yarenty.ddi.DataMunging._
+import com.yarenty.ddi.raw.DataMunging
+import DataMunging._
 import com.yarenty.ddi.schemas.{WeatherParse, WeatherIN, Weather, WeatherCSVParser}
 import org.apache.spark.{SparkFiles, h2o}
 import org.apache.spark.h2o._

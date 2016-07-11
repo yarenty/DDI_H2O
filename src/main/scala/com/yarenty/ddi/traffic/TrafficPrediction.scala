@@ -3,7 +3,8 @@ package com.yarenty.ddi.traffic
 import java.io.{PrintWriter, File}
 
 
-import com.yarenty.ddi.DataMunging._
+import com.yarenty.ddi.raw.DataMunging
+import DataMunging._
 import com.yarenty.ddi.schemas._
 import com.yarenty.ddi.traffic.TrafficPredictionTrain._
 import com.yarenty.ddi.traffic.TrafficPredictionTrain.data_dir
@@ -185,8 +186,8 @@ object TrafficPrediction extends SparkContextSupport {
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
-      val normalizedTraffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]] = traffic.map(x =>
-       x._1 ->  ( x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
+      val normalizedTraffic: Map[Int, Tuple7[Int, Int, Int, Double, Double, Double, Double]] = traffic.map(x =>
+        x._1 ->(x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
       )
 
 
@@ -194,8 +195,6 @@ object TrafficPrediction extends SparkContextSupport {
         new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
       val weatherTable = asRDD[PWeather](weatherData)
-
-
 
 
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
@@ -249,7 +248,7 @@ object TrafficPrediction extends SparkContextSupport {
   }
 
   def lineBuilder(headers: Array[String],
-                  traffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]],
+                  traffic: Map[Int, Tuple7[Int, Int, Int, Double, Double, Double, Double]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
                   poi: Map[Int, Map[String, Double]],
                   pd: Int): Frame = {

@@ -9,14 +9,14 @@ import water.parser._
   */
 class PTraffic(val district: Option[Int],
                val timeslice: Option[Int],
-                val t1: Option[Double],
-                val t2: Option[Double],
-                val t3: Option[Double],
-                val t4: Option[Double],
-                val t1p: Option[Double],
-                val t2p: Option[Double],
-                val t3p: Option[Double],
-                val t4p: Option[Double]
+               val t1: Option[Double],
+               val t2: Option[Double],
+               val t3: Option[Double],
+               val t4: Option[Double],
+               val t1p: Option[Double],
+               val t2p: Option[Double],
+               val t3p: Option[Double],
+               val t4p: Option[Double]
 
               ) extends Product with Serializable {
 
@@ -73,18 +73,17 @@ object PTrafficParse extends Serializable {
 }
 
 
-
 /**
   *
   * Created by yarenty on 24/06/2016.
   * (C)2015 SkyCorp Ltd.  *
-  *  "day","timeslice","weather","temp","pollution")
+  * "day","timeslice","weather","temp","pollution")
   */
 class PWeather(val day: Option[Int],
                val timeslice: Option[Int],
-                val weather: Option[Int],
-                val temp: Option[Double],
-                val pollution: Option[Double]
+               val weather: Option[Int],
+               val temp: Option[Double],
+               val pollution: Option[Double]
 
               ) extends Product with Serializable {
 
@@ -114,7 +113,6 @@ class PWeather(val day: Option[Int],
 }
 
 
-
 /** A dummy csv parser for orders dataset. */
 object PWeatherParse extends Serializable {
 
@@ -137,9 +135,9 @@ object WCVSParser {
 
     val parseTraffic: ParseSetup = new ParseSetup()
     val trafficNames: Array[String] = Array(
-      "day","timeslice","weather","temp","pollution")
+      "day", "timeslice", "weather", "temp", "pollution")
     val trafficTypes = ParseSetup.strToColumnTypes(Array(
-      "int","int",  "int","double","double"))
+      "int", "int", "int", "double", "double"))
     parseTraffic.setColumnNames(trafficNames)
     parseTraffic.setColumnTypes(trafficTypes)
     parseTraffic.setParseType(DefaultParserProviders.CSV_INFO)
@@ -156,9 +154,9 @@ object TCSVParser {
 
     val parseTraffic: ParseSetup = new ParseSetup()
     val trafficNames: Array[String] = Array(
-      "district","timeslice","t1","t2","t3","t4","t1p","t2p","t3p","t4p")
+      "district", "timeslice", "t1", "t2", "t3", "t4", "t1p", "t2p", "t3p", "t4p")
     val trafficTypes = ParseSetup.strToColumnTypes(Array(
-      "int","int",  "int","int","int","int", "double","double","double","double"))
+      "int", "int", "int", "int", "int", "int", "double", "double", "double", "double"))
     parseTraffic.setColumnNames(trafficNames)
     parseTraffic.setColumnTypes(trafficTypes)
     parseTraffic.setParseType(DefaultParserProviders.CSV_INFO)

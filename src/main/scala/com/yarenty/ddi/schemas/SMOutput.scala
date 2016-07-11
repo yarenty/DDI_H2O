@@ -11,7 +11,7 @@ class SMOutput(
                 val timeslice: Option[Int],
                 val districtID: Option[Int],
                 val destDistrict: Option[Int],
-                val demand: Option[Int],
+                val day: Option[Int],
                 val gap: Option[Int],
                 val traffic1: Option[Int],
                 val traffic2: Option[Int],
@@ -55,7 +55,7 @@ class SMOutput(
     case 1 => timeslice
     case 2 => districtID
     case 3 => destDistrict
-    case 4 => demand
+    case 4 => day
     case 5 => gap
     case 6 => traffic1
     case 7 => traffic2
@@ -114,7 +114,7 @@ object SMOutputParse extends Serializable {
       int(row(1)), //timeslice
       int(row(2)), //district ID
       int(row(3)), //destDistrict
-      int(row(4)), //demand
+      int(row(4)), //day
       int(row(5)), //gap
       int(row(6)), //traffic1
       int(row(7)), //traffic2
@@ -160,22 +160,18 @@ object SMOutputParse extends Serializable {
 //  separator: 44
 //  number_columns: 37
 //  single_quotes: false
-//  column_names: ["id","timeslice","districtID","destDistrict","demand","gap","traffic1","traffic2","traffic3","traffic4","weather","temp","pollution","1","2","3","4","5","6","7","8","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25"]
+//  column_names: ["id","timeslice","districtID","destDistrict","day","gap","traffic1","traffic2","traffic3","traffic4","weather","temp","pollution","1","2","3","4","5","6","7","8","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25"]
 //  column_types: ["Numeric","Enum","Enum","Enum","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric","Numeric"]
 //  delete_on_done: true
 //  check_header: 1
 //  chunk_size: 14781440
-
-//"p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p10",
-//"p11", "p12", "p13", "p14", "p15", "p16", "p17", "p18", "p19", "p20",
-//"p21", "p22", "p23", "p24", "p25")
 
 object SMOutputCSVParser {
 
   def get: ParseSetup = {
     val parse: ParseSetup = new ParseSetup()
     val orderNames: Array[String] = Array(
-      "id", "timeslice", "districtID", "destDistrict", "demand", "gap",
+      "id", "timeslice", "districtID", "destDistrict", "day", "gap",
       "traffic1", "traffic2", "traffic3", "traffic4", "weather", "temp", "pollution",
       "1", "2", "3", "4", "5", "6", "7", "8", "10",
       "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",

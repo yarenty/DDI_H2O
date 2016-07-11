@@ -36,8 +36,6 @@ object TrafficPredic extends SparkContextSupport {
 
 
 
-
-
     println(s"\n\n LETS MODEL\n")
     val predictset = Array("2016-01-22_predict", "2016-01-26_predict", "2016-01-30_predict", "2016-01-28_predict", "2016-01-24_predict")
 
@@ -53,8 +51,8 @@ object TrafficPredic extends SparkContextSupport {
     val smOutputTrain = new h2o.H2OFrame(TPCSVParser.get, trainURIs: _*)
     val smOutputTest = new h2o.H2OFrame(TPCSVParser.get, testURIs: _*)
 
-    smOutputTrain.colToEnum(Array("day","timeslice", "district"))
-    smOutputTest.colToEnum(Array("day","timeslice", "district"))
+    smOutputTrain.colToEnum(Array("day", "timeslice", "district"))
+    smOutputTest.colToEnum(Array("day", "timeslice", "district"))
 
 
     println(s"\n===> TRAIN: ${smOutputTrain.numRows()}\n")
@@ -71,7 +69,7 @@ object TrafficPredic extends SparkContextSupport {
 
     for (pu <- predictset) {
       val smOutputPredict = new h2o.H2OFrame(TPCSVParser.get, new URI("file:///" + SparkFiles.get("t_" + pu)))
-      smOutputPredict.colToEnum(Array("day","timeslice", "district"))
+      smOutputPredict.colToEnum(Array("day", "timeslice", "district"))
       val predictT1Demand = t1Model.score(smOutputPredict)
       val vecT1 = predictT1Demand.get.lastVec
       smOutputPredict.add("t1p", vecT1)
@@ -88,7 +86,7 @@ object TrafficPredic extends SparkContextSupport {
       val vecT4 = predictT4Demand.get.lastVec
       smOutputPredict.add("t4p", vecT4)
 
-      saveOutput(smOutputPredict,pu)
+      saveOutput(smOutputPredict, pu)
     }
     println("=========> off to go!!!")
   }
@@ -97,14 +95,14 @@ object TrafficPredic extends SparkContextSupport {
   def saveOutput(smOutputTest: H2OFrame, p: String): Unit = {
 
     import MLProcessor.sqlContext
-    val names = Array("district", "timeslice", "t1", "t2","t3","t4","t1p","t2p","t3p","t4p")
+    val names = Array("district", "timeslice", "t1", "t2", "t3", "t4", "t1p", "t2p", "t3p", "t4p")
 
     val key = Key.make("output").asInstanceOf[Key[Frame]]
     val out = new Frame(key, names, smOutputTest.vecs(names))
 
 
     val csv = out.toCSV(true, false)
-    val csv_writer = new PrintWriter(new File("/opt/data/season_1/outtraffic/t_"+p.substring(0,10)+"_test_all"))
+    val csv_writer = new PrintWriter(new File("/opt/data/season_1/outtraffic/t_" + p.substring(0, 10) + "_test_all"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
     }
@@ -131,7 +129,7 @@ object TrafficPredic extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._response_column = "t1"
-    params._ignored_columns = Array("t2", "t3","t4")
+    params._ignored_columns = Array("t2", "t3", "t4")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -145,7 +143,7 @@ object TrafficPredic extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._response_column = "t2"
-    params._ignored_columns = Array("t1", "t3","t4")
+    params._ignored_columns = Array("t1", "t3", "t4")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -159,7 +157,7 @@ object TrafficPredic extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._response_column = "t3"
-    params._ignored_columns = Array("t2", "t1","t4")
+    params._ignored_columns = Array("t2", "t1", "t4")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -173,7 +171,7 @@ object TrafficPredic extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._response_column = "t4"
-    params._ignored_columns = Array("t2", "t3","t1")
+    params._ignored_columns = Array("t2", "t3", "t1")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)

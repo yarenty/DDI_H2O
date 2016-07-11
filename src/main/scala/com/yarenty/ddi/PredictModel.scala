@@ -43,20 +43,17 @@ object PredictModel extends SparkContextSupport {
     println(s"\n\n LETS MODEL\n")
 
 
-    val testset = Array(22,24,26,28,30).map(i => "2016-01-" + "%02d".format(i) + "_test").toArray
+    val testset = Array(22, 24, 26, 28, 30).map(i => "2016-01-" + "%02d".format(i) + "_test").toArray
     for (p <- testset) addFiles(sc, absPath(data_dir + p))
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
 
 
     println("DRF Model")
-    val gapModel = new DRFModel(null, null,null)
+    val gapModel = new DRFModel(null, null, null)
     println("loading...")
-//    gapModel.reloadFromBytes(FileUtils.readFileToByteArray(new File("/opt/data/DRFGapModel_1468228747620.hex_model")))
-//    println("MODEL LOADED")
 
-
-    val omab = new FileInputStream("/opt/data/DRFGapModel_1468231761413.hex_bad")
-    val ab = new AutoBuffer (omab)
+    val omab = new FileInputStream("/opt/data/season_1/out_263/DRFGapModel_1468242944125.hex")
+    val ab = new AutoBuffer(omab)
     gapModel.read(ab)
     println("MODEL LOADED")
     ab.close()
@@ -65,8 +62,7 @@ object PredictModel extends SparkContextSupport {
 
     for (u <- testURIs) {
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
-      predictMe.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
-
+      predictMe.colToEnum(Array("day", "timeslice", "districtID", "destDistrict", "weather"))
 
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec
@@ -78,12 +74,7 @@ object PredictModel extends SparkContextSupport {
     println("=========> off to go!!!")
 
 
-
   }
-
-
-
-
 
 
   def saveOutput(smOutputTest: H2OFrame, fName: String): Unit = {
@@ -120,19 +111,7 @@ object PredictModel extends SparkContextSupport {
       csv_writer.write(csv.read.toChar)
     }
     csv_writer.close
-
-
-//    val csvfull = odf.toCSV(true, false)
-//    val csvfull_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + "_full.csv"))
-//    while (csvfull.available() > 0) {
-//      csvfull_writer.write(csvfull.read.toChar)
-//    }
-//    csvfull_writer.close
-//
-//    println(s" CSV created: /opt/data/season_1/out/final_" + name + "_full.csv")
-
   }
-
 
 
 }

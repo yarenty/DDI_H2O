@@ -2,7 +2,8 @@ package com.yarenty.ddi.traffic
 
 import java.io.{File, PrintWriter}
 
-import com.yarenty.ddi.DataMunging._
+import com.yarenty.ddi.raw.DataMunging
+import DataMunging._
 import com.yarenty.ddi.schemas._
 import com.yarenty.ddi.traffic.TrafficPredictionTrain._
 import com.yarenty.ddi.traffic.TrafficPredictionTrain.data_dir
@@ -127,23 +128,13 @@ object TrafficPredictionTest extends SparkContextSupport {
 
 
     val files = {
-
-      traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
       weather_csv = data_dir + "outweather/w_"
-
-//              (1 to 21).map(i => {
-//                val pd = "2016-01-" + "%02d".format(i)
-//                (i, traffic_csv + pd, weather_csv + pd, pd)
-//              })
-
       traffic_csv = data_dir + "test_set_1/traffic_data/traffic_data_"
       val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
       var x = 20
-
-      // out ++
       a.map(pd => {
         x += 2
-        (x, traffic_csv + pd,weather_csv + pd, pd )
+        (x, traffic_csv + pd, weather_csv + pd, pd)
       })
 
 
@@ -183,70 +174,48 @@ object TrafficPredictionTest extends SparkContextSupport {
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
-      val normalizedTraffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]] = traffic.map(x =>
-       x._1 ->  ( x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
+      val normalizedTraffic: Map[Int, Tuple7[Int, Int, Int, Double, Double, Double, Double]] = traffic.map(x =>
+        x._1 ->(x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
       )
 
-//      var filledTraffic: Tuple7[Int,Int,Int,Int, Int, Int, Int] = (0, 0, 0, 0,0,0,0)
-//      //fill traffic
-//      for (din <- 1 to 66) {
-//        for (i <- 1 to 144) {
-//          val idx = i * 100 + din
-//          if (traffic.contains(idx)) {
-//            filledTraffic = traffic.get(idx).get
-//          }
-//        }
-//        for (i <- 1 to 144) {
-//          val idx = i * 100 + din
-//          if (traffic.contains(idx)) {
-//            filledTraffic = traffic.get(idx).get
-//          } else {
-//            traffic += idx -> filledTraffic
-//          }
-//        }
-//      }
-//      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
       val weatherData = new h2o.H2OFrame(WCVSParser.get,
-         new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
-       println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
-       val weatherTable = asRDD[PWeather](weatherData)
+        new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
+      println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
+      val weatherTable = asRDD[PWeather](weatherData)
+
+      var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
+        row.timeslice.get ->(
+          row.timeslice.get,
+          (20.0 + row.temp.get) / 40.0,
+          row.pollution.get / 100.0)
+      }).collect().toMap
+      println(s" WEATHER MAP SIZE: ${weather.size}")
+
+      var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0) //after doing naive bayes - this looks much better ;-)
+      for (i <- 1 to 144) {
+        if (weather.contains(i)) {
+          filledWeather = weather.get(i).get
+        }
+      }
+      for (i <- 1 to 144) {
+        if (weather.contains(i)) {
+          filledWeather = weather.get(i).get
+        } else {
+          weather += i -> filledWeather
+        }
+      }
+      println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
 
 
 
-
-       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
-         row.timeslice.get ->(
-           row.timeslice.get,
-           (20.0 + row.temp.get) / 40.0,
-           row.pollution.get / 100.0)
-       }).collect().toMap
-       println(s" WEATHER MAP SIZE: ${weather.size}")
-
-       var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0) //after doing naive bayes - this looks much better ;-)
-       for (i <- 1 to 144) {
-         if (weather.contains(i)) {
-           filledWeather = weather.get(i).get
-         }
-       }
-       for (i <- 1 to 144) {
-         if (weather.contains(i)) {
-           filledWeather = weather.get(i).get
-         } else {
-           weather += i -> filledWeather
-         }
-       }
-       println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
-
-
-
-      val headers = Array("day", "district", "timeslice", "t1", "t2", "t3", "t4", "temp","pollution",
+      val headers = Array("day", "district", "timeslice", "t1", "t2", "t3", "t4", "temp", "pollution",
         "1", "2", "3", "4", "5", "6", "7", "8", "10",
         "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
         "21", "22", "23", "24", "25"
       )
 
-      val out = new h2o.H2OFrame(testLineBuilder(headers, normalizedTraffic, weather,mergedPOI, PROCESSED_DAY))
+      val out = new h2o.H2OFrame(testLineBuilder(headers, normalizedTraffic, weather, mergedPOI, PROCESSED_DAY))
 
       val csv = out.toCSV(true, false)
 
@@ -265,68 +234,67 @@ object TrafficPredictionTest extends SparkContextSupport {
   }
 
 
-
   def testLineBuilder(headers: Array[String],
-                      traffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]],
-                      weather:Map[Int, Tuple3[Int, Double, Double]],
+                      traffic: Map[Int, Tuple7[Int, Int, Int, Double, Double, Double, Double]],
+                      weather: Map[Int, Tuple3[Int, Double, Double]],
                       poi: Map[Int, Map[String, Double]],
                       pd: Int): Frame = {
 
-      val len = headers.length
+    val len = headers.length
 
-      val fs = new Array[Futures](len)
-      val av = new Array[AppendableVec](len)
-      val chunks = new Array[NewChunk](len)
-      val vecs = new Array[Vec](len)
+    val fs = new Array[Futures](len)
+    val av = new Array[AppendableVec](len)
+    val chunks = new Array[NewChunk](len)
+    val vecs = new Array[Vec](len)
 
 
-      for (i <- 0 until len) {
-        fs(i) = new Futures()
-        av(i) = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
-        chunks(i) = new NewChunk(av(i), 0)
-      }
+    for (i <- 0 until len) {
+      fs(i) = new Futures()
+      av(i) = new AppendableVec(new Vec.VectorGroup().addVec(), Vec.T_NUM)
+      chunks(i) = new NewChunk(av(i), 0)
+    }
 
-      for (ts <- traffic)  {
-        val t = ts._2
+    for (ts <- traffic) {
+      val t = ts._2
 
-            chunks(0).addNum(t._1)
-            chunks(1).addNum(t._2)
-            chunks(2).addNum(t._3)
-            chunks(3).addNum(t._4)
-            chunks(4).addNum(t._5)
-            chunks(5).addNum(t._6)
-            chunks(6).addNum(t._7)
-            chunks(7).addNum(weather.get(t._3).get._2)
-            chunks(8).addNum(weather.get(t._3).get._3)
+      chunks(0).addNum(t._1)
+      chunks(1).addNum(t._2)
+      chunks(2).addNum(t._3)
+      chunks(3).addNum(t._4)
+      chunks(4).addNum(t._5)
+      chunks(5).addNum(t._6)
+      chunks(6).addNum(t._7)
+      chunks(7).addNum(weather.get(t._3).get._2)
+      chunks(8).addNum(weather.get(t._3).get._3)
 
-        for (pp <- 9 until len) {
+      for (pp <- 9 until len) {
 
-          if (poi.contains(t._2)) {
-            val m = poi.get(t._2).get
+        if (poi.contains(t._2)) {
+          val m = poi.get(t._2).get
 
-            if (m.contains(headers(pp))) {
-              chunks(pp).addNum(m.get(headers(pp)).get)
-            }
-            else {
-              chunks(pp).addNum(0)
-            }
+          if (m.contains(headers(pp))) {
+            chunks(pp).addNum(m.get(headers(pp)).get)
           }
           else {
-            chunks(pp).addNA()
-
+            chunks(pp).addNum(0)
           }
         }
+        else {
+          chunks(pp).addNA()
 
-         }
-
-      for (i <- 0 until len) {
-        chunks(i).close(0, fs(i))
-        vecs(i) = av(i).layout_and_close(fs(i))
-        fs(i).blockForPending()
+        }
       }
-      val key = Key.make("Traffic")
-      return new Frame(key, headers, vecs)
+
     }
+
+    for (i <- 0 until len) {
+      chunks(i).close(0, fs(i))
+      vecs(i) = av(i).layout_and_close(fs(i))
+      fs(i).blockForPending()
+    }
+    val key = Key.make("Traffic")
+    return new Frame(key, headers, vecs)
+  }
 
 
   /**

@@ -1,24 +1,21 @@
-package com.yarenty.ddi
+package com.yarenty.ddi.raw
 
-import java.io.{PrintWriter, File}
+import java.io.{File, PrintWriter}
 
+import org.apache.spark._
+import org.apache.spark.h2o._
 import water._
 import water.fvec._
 
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer, HashMap}
-import org.apache.spark.h2o._
-import org.apache.spark._
+import scala.collection.mutable.HashMap
 
 //import org.apache.spark.{SparkFiles, h2o, SparkContext}
 //import org.apache.spark.h2o.{RDD, H2OFrame, DoubleHolder, H2OContext}
+import com.yarenty.ddi.schemas._
 import org.apache.spark.broadcast.Broadcast
-
 import org.apache.spark.sql.SQLContext
 import water.support.SparkContextSupport
-import com.yarenty.ddi.schemas._
-
-import com.yarenty.ddi.utils._
 
 
 /**
@@ -46,7 +43,6 @@ object DataMunging extends SparkContextSupport {
     import h2oContext.implicits._
     val sc = h2oContext.sparkContext
     implicit val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
 
     addFiles(h2oContext.sparkContext,
       absPath(cluster_csv),
@@ -61,11 +57,6 @@ object DataMunging extends SparkContextSupport {
     // Use super-fast advanced H2O CSV parser !!!
     val poiData = new h2o.H2OFrame(new File(SparkFiles.get("poi_data")))
     println(s"\n===> POI via H2O#Frame#count: ${poiData.numRows()}\n")
-
-    //  Use H2O to RDD transformation
-    //    val poiTable = poiData.vecs()
-    //    println(s"\n===> POI in ${order_csv} via RDD#count call: ${poiTable.length}\n")
-
 
     val poi: Map[Int, Map[String, Int]] = asRDD[POI](poiData).map(row => {
       getPOIMap(disctrictMapBR, row)
@@ -84,23 +75,22 @@ object DataMunging extends SparkContextSupport {
       traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
       weather_csv = data_dir + "training_data/weather_data/weather_data_"
 
-      val out: Seq[Tuple4[String, String, String, String]] =
+      val out =
         (1 to 21).map(i => {
           val pd = "2016-01-" + "%02d".format(i)
-          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
+          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd, i)
         }).toSeq
 
       order_csv = data_dir + "test_set_1/order_data/order_data_"
       traffic_csv = data_dir + "test_set_1/traffic_data/traffic_data_"
       weather_csv = data_dir + "test_set_1/weather_data/weather_data_"
       val a = Array("2016-01-22_test", "2016-01-24_test", "2016-01-26_test", "2016-01-28_test", "2016-01-30_test")
-      var x = 21
+      var x = 20
 
       out ++ a.map(pd => {
-        x += 1
-        (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd)
+        x += 2
+        (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd, x)
       })
-
 
     }
 
@@ -126,22 +116,11 @@ object DataMunging extends SparkContextSupport {
 
 
 
-      //get number of demand drives
-      val orders: Map[Int, Int] = orderTable.map(row => {
-        val timeslice = getTimeSlice(row.Time.get)
-        var from = disctrictMapBR.value.get(row.StartDH.get)
-        var to = disctrictMapBR.value.get(row.DestDH.get)
-        if (to == None) to = Option(0)
-        val indx = getIndex(timeslice, from.get, to.get)
-        indx
-      }).groupBy(identity).mapValues(_.size).collect().toMap
-
       //get number of gap drives (did not happen)
       val gaps: Map[Int, Int] = orderTable.map(row => {
         val timeslice = getTimeSlice(row.Time.get)
-        var from = disctrictMapBR.value.get(row.StartDH.get)
-        var to = disctrictMapBR.value.get(row.DestDH.get)
-        if (to == None) to = Option(0)
+        val from = disctrictMapBR.value.get(row.StartDH.get)
+        val to = if (disctrictMapBR.value.get(row.DestDH.get) == None) Option(0) else disctrictMapBR.value.get(row.DestDH.get)
         val indx = getIndex(timeslice, from.get, to.get)
         val gap = row.DriverId.get
         if (gap != "NULL") {
@@ -151,9 +130,8 @@ object DataMunging extends SparkContextSupport {
         }
       }).groupBy(identity).mapValues(_.size).collect().toMap
 
-      println(s"\n===> ALL ORDERS :: ${orders.size} ")
-      println(s"\n===> GAP ORDERS :: ${gaps.size} ")
 
+      println(s"\n===> GAP ORDERS :: ${gaps.size} ")
 
 
       val trafficData = new h2o.H2OFrame(TrafficCSVParser.get,
@@ -179,25 +157,25 @@ object DataMunging extends SparkContextSupport {
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
 
-            var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
-            //fill traffic
-            for (din <- 1 to 66) {
-              for (i <- 1 to 144) {
-                val idx = i * 100 + din
-                if (traffic.contains(idx)) {
-                  filledTraffic = traffic.get(idx).get
-                }
-              }
-              for (i <- 1 to 144) {
-                val idx = i * 100 + din
-                if (traffic.contains(idx)) {
-                  filledTraffic = traffic.get(idx).get
-                } else {
-                  traffic += idx -> filledTraffic
-                }
-              }
-            }
-            println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
+      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
+      //fill traffic
+      for (din <- 1 to 66) {
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            filledTraffic = traffic.get(idx).get
+          }
+        }
+        for (i <- 1 to 144) {
+          val idx = i * 100 + din
+          if (traffic.contains(idx)) {
+            filledTraffic = traffic.get(idx).get
+          } else {
+            traffic += idx -> filledTraffic
+          }
+        }
+      }
+      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
 
       val weatherData = new h2o.H2OFrame(WeatherCSVParser.get,
@@ -211,7 +189,7 @@ object DataMunging extends SparkContextSupport {
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
         row.ts ->(
           row.Weather.get,
-          if (row.Temperature.get<0) 0.0 else row.Temperature.get,
+          if (row.Temperature.get < 0) 0.0 else row.Temperature.get,
           row.Pollution.get)
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
@@ -259,7 +237,7 @@ object DataMunging extends SparkContextSupport {
       //      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
 
 
-      val headers = Array("id", "timeslice", "districtID", "destDistrict", "demand", "gap",
+      val headers = Array("id", "timeslice", "districtID", "destDistrict", "day", "gap",
         "traffic1", "traffic2", "traffic3", "traffic4",
         "weather", "temp", "pollution",
         "1", "2", "3", "4", "5", "6", "7", "8", "10",
@@ -272,7 +250,7 @@ object DataMunging extends SparkContextSupport {
         Vec.T_NUM)
 
       val myData = new h2o.H2OFrame(lineBuilder(headers, types,
-        orders,
+        f._5 % 7,
         gaps,
         traffic,
         weather,
@@ -317,7 +295,7 @@ object DataMunging extends SparkContextSupport {
 
 
   def lineBuilder(headers: Array[String], types: Array[Byte],
-                  orders: Map[Int, Int],
+                  dayOfWeek: Int,
                   gaps: Map[Int, Int],
                   traffic: Map[Int, Tuple4[Int, Int, Int, Int]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
@@ -346,12 +324,8 @@ object DataMunging extends SparkContextSupport {
           chunks(2).addNum(din)
           chunks(3).addNum(dout)
 
-          if (orders.contains(idx)) {
-            chunks(4).addNum(orders.get(idx).get)
-          }
-          else {
-            chunks(4).addNum(0)
-          }
+
+          chunks(4).addNum(dayOfWeek)
 
 
           if (gaps.contains(idx)) {

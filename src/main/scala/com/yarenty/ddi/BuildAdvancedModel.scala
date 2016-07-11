@@ -48,25 +48,25 @@ object BuildAdvancedModel extends SparkContextSupport {
     println(s"\n\n LETS MODEL\n")
 
 
-    val testset = Array(22,24,26,28,30).map(i => "2016-01-" + "%02d".format(i) + "_test").toArray
+    val testset = Array(22, 24, 26, 28, 30).map(i => "2016-01-" + "%02d".format(i) + "_test").toArray
     for (p <- testset) addFiles(sc, absPath(data_dir + p))
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
-    var tmpTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs(0))
-    var dfTest = asDataFrame(tmpTest)
+    //    val tmpTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs(0))
+    //    var dfTest = asDataFrame(tmpTest)
 
-//    1 by 1 to avoid OOM!
-    for (tu <- testURIs.drop(1)) {
-      val tmp = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
-      dfTest = dfTest.unionAll(asDataFrame(tmp))
-      println(s" SIZE: ${dfTest.count} ")
-    }
-    val testData = asH2OFrame(dfTest,"test")
+    //    1 by 1 to avoid OOM!
+    //    for (tu <- testURIs.drop(1)) {
+    //      val tmp = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
+    //      dfTest = dfTest.unionAll(asDataFrame(tmp))
+    //      println(s" SIZE: ${dfTest.count} ")
+    //    }
+    //    val testData = asH2OFrame(dfTest,"test")
 
-                   //@TODO: 1 to 21
-    val trainset  = (17 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
+    //@TODO: 1 to 21
+    val trainset = (14 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
-    var tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get,trainURIs(0) )
+    val tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs(0))
     var dfTrain = asDataFrame(tmpTrain)
 
     //1 by 1 to avoid OOM!
@@ -75,41 +75,33 @@ object BuildAdvancedModel extends SparkContextSupport {
       dfTrain = dfTrain.unionAll(asDataFrame(tmp))
       println(s" SIZE: ${dfTrain.count} ")
     }
+    //    val trainData = asH2OFrame(dfTrain,"train")
 
+    val data = dfTrain.randomSplit(Array(0.8, 0.2), 1) //better results!
+    val trainData = asH2OFrame(data(0), "train")
+    val testData = asH2OFrame(data(1), "test")
 
-//    val data = dfTrain.randomSplit(Array(0.8, 0.2), 1) //need to do it twice
-//    val trainData = asH2OFrame(data(0), "train")
-//    val testData = asH2OFrame(data(1), "test")
-
-    val trainData = asH2OFrame(dfTrain,"train")
-
-
-    trainData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
-    testData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
-
-    println(s" TRAIN/TEST DATA CREATED ");
-
+    trainData.colToEnum(Array("day", "timeslice", "districtID", "destDistrict", "weather"))
+    testData.colToEnum(Array("day", "timeslice", "districtID", "destDistrict", "weather"))
 
     println(s"\n===> TRAIN: ${trainData.numRows()}\n")
     println(s"\n===>  TEST: ${testData.numRows()}\n")
 
 
     val gapModel = drfGapModel(trainData, testData)
-//    val gapModel = dlGapModel(trainData, testData)
+    //    val gapModel = dlGapModel(trainData, testData)
     // SAVE THE MODEL!!!
     val om = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".java")
     gapModel.toJava(om, false, false)
-
-
     val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex")
-    val ab = new AutoBuffer (omab,true)
+    val ab = new AutoBuffer(omab, true)
     gapModel.write(ab)
     ab.close()
+    println("JAVA and hex(iced) models saved.")
 
     for (u <- testURIs) {
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
-      predictMe.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
-
+      predictMe.colToEnum(Array("day", "timeslice", "districtID", "destDistrict", "weather"))
 
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec
@@ -121,12 +113,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     println("=========> off to go!!!")
 
 
-
   }
-
-
-
-
 
 
   def saveOutput(smOutputTest: H2OFrame, fName: String): Unit = {
@@ -136,21 +123,16 @@ object BuildAdvancedModel extends SparkContextSupport {
 
     val key = Key.make("output").asInstanceOf[Key[Frame]]
     val out = new Frame(key, names, smOutputTest.vecs(names))
-
     val zz = new h2o.H2OFrame(out)
-
     val odf = asDataFrame(zz)
-
     odf.registerTempTable("out")
 
+    //filtering
     val a = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.5,cast(0.0 as double), predict) as predict from out")
     a.registerTempTable("gaps")
     val o = sqlContext.sql(" select timeslice, districtID, sum(gap) as gap, sum(predict) as predict from gaps " +
       "  group by timeslice,districtID")
-
-
     o.take(20).foreach(println)
-
     val toSee = new H2OFrame(o)
 
     println(s" output should be visible now ")
@@ -172,19 +154,17 @@ object BuildAdvancedModel extends SparkContextSupport {
     }
     csvfull_writer.close
 
-    println(s" CSV created: /opt/data/season_1/out/final_" + name + "_full.csv")
+    println(s" CSV created: /opt/data/season_1/out/final_" + name + ".csv")
 
   }
 
 
-
-
-  /******************************************************
+  /** ****************************************************
     *
     * MODELS
     *
     *
-    ******************************************************/
+    * *****************************************************/
 
 
   def gbmModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): GBMModel = {
@@ -194,20 +174,15 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id","weather","temp")
+    params._ignored_columns = Array("id", "weather", "temp")
     params._ignore_const_cols = true
 
-    println("PARAMS:" + params)
+    println("BUILDING:" + params)
     val gbm = new GBM(params)
-
-    println("GBM:" + gbm)
-
     gbm.trainModel.get
-
   }
 
 
-  //
   //    buildModel 'drf', {
   //      "model_id":"drf-64ae9c97-6435-4380-b0a9-65ef71569f08",
   //      "training_frame":"sm_2016_01_22_test.hex",
@@ -232,26 +207,21 @@ object BuildAdvancedModel extends SparkContextSupport {
   //      "col_sample_rate_change_per_level":1}
 
 
-
-
   def drfGapModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
 
     val params = new DRFParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
 
-    params._ntrees = 20  //@todo remove
+    params._ntrees = 20 //@todo use more
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "weather","temp")    //demand is day of week
+    params._ignored_columns = Array("id", "weather", "temp")
     params._ignore_const_cols = false
-    params._nbins = 100
-    params._max_depth = 50
+    //    params._nbins = 50
+    //    params._max_depth = 10
 
-
-    println("PARAMS:" + params.fullName)
+    println("BUILDING:" + params.fullName)
     val drf = new DRF(params)
-
-    println("DRF:" + drf)
     drf.trainModel.get
   }
 
@@ -283,16 +253,14 @@ object BuildAdvancedModel extends SparkContextSupport {
     //params._standardize = false
 
     //@TODO: removeme  (do bigger stuff)
-//    params._hidden = Array(50,50)
+    //    params._hidden = Array(50,50)
     params._mini_batch_size = 10
     params._epochs = 5.0
 
-    println("PARAMS:" + params.fullName)
+    println("BUILDING:" + params.fullName)
     val drf = new DeepLearning(params)
-
     println("DRF:" + drf)
     drf.trainModel.get
-
   }
 
 }

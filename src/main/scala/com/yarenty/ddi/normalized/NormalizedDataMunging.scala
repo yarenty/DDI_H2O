@@ -80,11 +80,11 @@ object NormalizedDataMunging extends SparkContextSupport {
       traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
       weather_csv = data_dir + "training_data/weather_data/weather_data_"
 
-//      val out: Seq[Tuple4[String, String, String, String]] =
-        (1 to 21).map(i => {
-          val pd = "2016-01-" + "%02d".format(i)
-          (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd, i)
-        }).toSeq
+      //      val out: Seq[Tuple4[String, String, String, String]] =
+      (1 to 21).map(i => {
+        val pd = "2016-01-" + "%02d".format(i)
+        (pd, order_csv + pd, traffic_csv + pd, weather_csv + pd, i)
+      }).toSeq
 
 
     }
@@ -110,27 +110,11 @@ object NormalizedDataMunging extends SparkContextSupport {
       println(s"\n===> ORDERS in ${f._2} via RDD#count call: ${orderTable.count()}\n")
 
 
-
-      //get number of demand drives
-//      val orders: Map[Int, Int] = orderTable.map(row => {
-//        val timeslice = getTimeSlice(row.Time.get)
-//        var from = disctrictMapBR.value.get(row.StartDH.get)
-//        var to = disctrictMapBR.value.get(row.DestDH.get)
-//        if (to == None) to = Option(0)
-//        val indx = getIndex(timeslice, from.get, to.get)
-//        indx
-//      }).groupBy(identity).mapValues(_.size).collect().toMap
-
-      val orders : Map[Int,Int] = (1 to 144).map( i =>
-        i -> f._5 % 7
-      ).toMap
-
       //get number of gap drives (did not happen)
       val gaps: Map[Int, Int] = orderTable.map(row => {
         val timeslice = getTimeSlice(row.Time.get)
-        var from = disctrictMapBR.value.get(row.StartDH.get)
-        var to = disctrictMapBR.value.get(row.DestDH.get)
-        if (to == None) to = Option(0)
+        val from = disctrictMapBR.value.get(row.StartDH.get)
+        val to = if (disctrictMapBR.value.get(row.DestDH.get) == None) Option(0) else disctrictMapBR.value.get(row.DestDH.get)
         val indx = getIndex(timeslice, from.get, to.get)
         val gap = row.DriverId.get
         if (gap != "NULL") {
@@ -140,7 +124,6 @@ object NormalizedDataMunging extends SparkContextSupport {
         }
       }).groupBy(identity).mapValues(_.size).collect().toMap
 
-      println(s"\n===> ALL ORDERS :: ${orders.size} ")
       println(s"\n===> GAP ORDERS :: ${gaps.size} ")
 
 
@@ -187,7 +170,7 @@ object NormalizedDataMunging extends SparkContextSupport {
         }
       }
       val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.map(x =>
-       x._1 ->  (x._2._1.toDouble / 2000.0, x._2._2.toDouble / 1000.0, x._2._3.toDouble / 400.0, x._2._4.toDouble / 200.0)
+        x._1 ->(x._2._1.toDouble / 2000.0, x._2._2.toDouble / 1000.0, x._2._3.toDouble / 400.0, x._2._4.toDouble / 200.0)
       )
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
@@ -206,7 +189,7 @@ object NormalizedDataMunging extends SparkContextSupport {
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
         row.ts ->(
           row.Weather.get, // not important - train doesnt have some values
-          (20.0 + row.Temperature.get)/40.0, // need to normalize as test data have values outside train!!
+          (20.0 + row.Temperature.get) / 40.0, // need to normalize as test data have values outside train!!
           row.Pollution.get / 100.0)
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
@@ -254,7 +237,7 @@ object NormalizedDataMunging extends SparkContextSupport {
       //      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
 
 
-      val headers = Array("id", "timeslice", "districtID", "destDistrict", "demand", "gap",
+      val headers = Array("id", "timeslice", "districtID", "destDistrict", "day", "gap",
         "traffic1", "traffic2", "traffic3", "traffic4",
         "weather", "temp", "pollution",
         "1", "2", "3", "4", "5", "6", "7", "8", "10",
@@ -267,7 +250,7 @@ object NormalizedDataMunging extends SparkContextSupport {
         Vec.T_NUM)
 
       val myData = new h2o.H2OFrame(lineBuilder(headers, types,
-        orders,
+        f._5 % 7,
         gaps,
         normalizedTraffic,
         weather,
@@ -312,7 +295,7 @@ object NormalizedDataMunging extends SparkContextSupport {
 
 
   def lineBuilder(headers: Array[String], types: Array[Byte],
-                  dayOfWeek: Map[Int, Int],
+                  dayOfWeek: Int,
                   gaps: Map[Int, Int],
                   traffic: Map[Int, Tuple4[Double, Double, Double, Double]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
@@ -346,12 +329,7 @@ object NormalizedDataMunging extends SparkContextSupport {
             chunks(3).addNum(dout)
           }
 
-          if (dayOfWeek.contains(ts)) {
-            chunks(4).addNum(dayOfWeek.get(ts).get)
-          }
-          else {
-            chunks(4).addNum(0)
-          }
+          chunks(4).addNum(dayOfWeek)
 
 
           if (gaps.contains(idx)) {

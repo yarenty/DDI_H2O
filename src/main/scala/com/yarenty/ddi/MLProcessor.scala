@@ -1,8 +1,10 @@
 package com.yarenty.ddi
 
-import com.yarenty.ddi.DataMunging._
+import com.yarenty.ddi.raw.DataMunging
+import DataMunging._
 import com.yarenty.ddi.normalized.{NormalizedDataMungingTest, NormalizedDataMunging}
 import com.yarenty.ddi.traffic.{TrafficPredictionTrain, TrafficPredictionTest, TrafficPredic, TrafficPrediction}
+import com.yarenty.ddi.utils.OutputFileMerger
 import com.yarenty.ddi.weather.{WeatherPredic, WeatherPrediction}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
@@ -30,24 +32,27 @@ object MLProcessor extends SparkContextSupport {
 
   def main(args: Array[String]) {
 
-    println(s"\n\n H2O CONTEXT is TOO !!!!!!\n")
+    println(s"\n\n H2O CONTEXT is HERE !!!!!!\n")
 
-//    WeatherPrediction.process(h2oContext)
-//    WeatherPredic.process(h2oContext)
-//
+
 //    TrafficPredictionTrain.process(h2oContext)
 //    TrafficPredictionTest.process(h2oContext)
 //    TrafficPrediction.process(h2oContext)
 //    TrafficPredic.process(h2oContext)
-//
-//    DataMunging.process(h2oContext)
-//    BuildModel.process(h2oContext)
-//
+
+//    DataMunging.process(h2oContext) //- not really working anymore
+//    BuildModel.process(h2oContext)  //- big error
+
 //    NormalizedDataMunging.process(h2oContext)
 //    NormalizedDataMungingTest.process(h2oContext)
+
     BuildAdvancedModel.process(h2oContext)
+
 //    PredictModel.process(h2oContext)
-//    ShortNormModel.process(h2oContext)
+
+
+    OutputFileMerger.process(h2oContext)
+    //    ShortNormModel.process(h2oContext)
 
 
     // Shutdown Spark cluster and H2O

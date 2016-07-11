@@ -1,4 +1,4 @@
-package com.yarenty.ddi
+package com.yarenty.ddi.utils
 
 /**
   * Created by yarenty on 30/06/2016.
@@ -16,8 +16,6 @@ object Helper {
       "p21", "p22", "p23", "p24", "p25")
 
     //    for (i <- in) println ("val "+i+": Option[Int],")
-
-
     //    var x=0
     //    for (i <- in ) {
     //      println("case "+x+" => " + i)

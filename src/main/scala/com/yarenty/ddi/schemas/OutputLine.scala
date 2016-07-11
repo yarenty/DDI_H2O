@@ -51,3 +51,23 @@ object OutputLineParse extends Serializable {
     )
   }
 }
+
+object OutputCSVParser {
+  def get: ParseSetup = {
+    val parseTraffic: ParseSetup = new ParseSetup()
+    val trafficNames: Array[String] = Array(
+      "timeslice", "districtID", "gap", "predict"
+    )
+    val trafficTypes = ParseSetup.strToColumnTypes(Array(
+      "int", "int", "int", "double"
+    ))
+    parseTraffic.setColumnNames(trafficNames)
+    parseTraffic.setColumnTypes(trafficTypes)
+    parseTraffic.setParseType(DefaultParserProviders.CSV_INFO)
+    parseTraffic.setSeparator(',')
+    parseTraffic.setNumberColumns(33)
+    parseTraffic.setSingleQuotes(false)
+    parseTraffic.setCheckHeader(1)
+  }
+
+}

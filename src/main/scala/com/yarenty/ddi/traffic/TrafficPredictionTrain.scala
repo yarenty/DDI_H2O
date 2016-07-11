@@ -2,7 +2,8 @@ package com.yarenty.ddi.traffic
 
 import java.io.{File, PrintWriter}
 
-import com.yarenty.ddi.DataMunging._
+import com.yarenty.ddi.raw.DataMunging
+import DataMunging._
 import com.yarenty.ddi.schemas._
 import org.apache.spark.h2o.H2OContext
 import org.apache.spark.sql.SQLContext
@@ -124,11 +125,10 @@ object TrafficPredictionTrain extends SparkContextSupport {
       traffic_csv = data_dir + "training_data/traffic_data/traffic_data_"
       weather_csv = data_dir + "outweather/w_"
 
-              (1 to 21).map(i => {
-                val pd = "2016-01-" + "%02d".format(i)
-                (i, traffic_csv + pd, weather_csv + pd, pd)
-              })
-
+      (1 to 21).map(i => {
+        val pd = "2016-01-" + "%02d".format(i)
+        (i, traffic_csv + pd, weather_csv + pd, pd)
+      })
 
 
     }
@@ -168,7 +168,7 @@ object TrafficPredictionTrain extends SparkContextSupport {
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
 
 
-      var filledTraffic: Tuple7[Int,Int,Int,Int, Int, Int, Int] = (0, 0, 0, 0,0,0,0)
+      var filledTraffic: Tuple7[Int, Int, Int, Int, Int, Int, Int] = (0, 0, 0, 0, 0, 0, 0)
       //fill traffic
       for (din <- 1 to 66) {
         for (i <- 1 to 144) {
@@ -188,44 +188,44 @@ object TrafficPredictionTrain extends SparkContextSupport {
       }
       println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
 
-      val normalizedTraffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]] = traffic.map(x =>
-       x._1 ->  ( x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
+      val normalizedTraffic: Map[Int, Tuple7[Int, Int, Int, Double, Double, Double, Double]] = traffic.map(x =>
+        x._1 ->(x._2._1, x._2._2, x._2._3, x._2._4.toDouble / 2000.0, x._2._5.toDouble / 1000.0, x._2._6.toDouble / 400.0, x._2._7.toDouble / 200.0)
       )
 
       val weatherData = new h2o.H2OFrame(WCVSParser.get,
-         new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
-       println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
-       val weatherTable = asRDD[PWeather](weatherData)
+        new File(SparkFiles.get("w_" + f._4))) // Use super-fast advanced H2O CSV parser !!!
+      println(s"\n===> WEATHER via H2O#Frame#count: ${weatherData.numRows()}\n")
+      val weatherTable = asRDD[PWeather](weatherData)
 
 
 
 
-       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
-         row.timeslice.get ->(
-           row.timeslice.get,
-           (20.0 + row.temp.get) / 40.0,
-           row.pollution.get / 100.0)
-       }).collect().toMap
-       println(s" WEATHER MAP SIZE: ${weather.size}")
+      var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
+        row.timeslice.get ->(
+          row.timeslice.get,
+          (20.0 + row.temp.get) / 40.0,
+          row.pollution.get / 100.0)
+      }).collect().toMap
+      println(s" WEATHER MAP SIZE: ${weather.size}")
 
-       var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0) //after doing naive bayes - this looks much better ;-)
-       for (i <- 1 to 144) {
-         if (weather.contains(i)) {
-           filledWeather = weather.get(i).get
-         }
-       }
-       for (i <- 1 to 144) {
-         if (weather.contains(i)) {
-           filledWeather = weather.get(i).get
-         } else {
-           weather += i -> filledWeather
-         }
-       }
-       println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
+      var filledWeather: Tuple3[Int, Double, Double] = (0, 0, 0) //after doing naive bayes - this looks much better ;-)
+      for (i <- 1 to 144) {
+        if (weather.contains(i)) {
+          filledWeather = weather.get(i).get
+        }
+      }
+      for (i <- 1 to 144) {
+        if (weather.contains(i)) {
+          filledWeather = weather.get(i).get
+        } else {
+          weather += i -> filledWeather
+        }
+      }
+      println(s" WEATHER MAP SIZE AFTER FILL: ${weather.size}")
 
 
 
-      val headers = Array("day", "district", "timeslice", "t1", "t2", "t3", "t4", "temp","pollution",
+      val headers = Array("day", "district", "timeslice", "t1", "t2", "t3", "t4", "temp", "pollution",
         "1", "2", "3", "4", "5", "6", "7", "8", "10",
         "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
         "21", "22", "23", "24", "25"
@@ -235,7 +235,7 @@ object TrafficPredictionTrain extends SparkContextSupport {
 
       val csv = out.toCSV(true, false)
 
-      val csv_writer = new PrintWriter(new File(output_dir + "%02d".format(PROCESSED_DAY) ))
+      val csv_writer = new PrintWriter(new File(output_dir + "%02d".format(PROCESSED_DAY)))
       while (csv.available() > 0) {
         csv_writer.write(csv.read.toChar)
       }
@@ -250,8 +250,8 @@ object TrafficPredictionTrain extends SparkContextSupport {
   }
 
   def lineBuilder(headers: Array[String],
-                  traffic: Map[Int, Tuple7[Int,Int,Int,Double, Double, Double, Double]],
-                  weather:Map[Int, Tuple3[Int, Double, Double]],
+                  traffic: Map[Int, Tuple7[Int, Int, Int, Double, Double, Double, Double]],
+                  weather: Map[Int, Tuple3[Int, Double, Double]],
                   poi: Map[Int, Map[String, Double]],
                   pd: Int): Frame = {
 
@@ -324,8 +324,6 @@ object TrafficPredictionTrain extends SparkContextSupport {
     val key = Key.make("Traffic")
     return new Frame(key, headers, vecs)
   }
-
-
 
 
   /**

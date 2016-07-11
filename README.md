@@ -6,6 +6,13 @@ Lets play.
 Sparkling Water 1.6.5 which integrates:
   - Spark 1.6.1
   - H2O 3.0 Shannon
+  - Data from DiDi competition: http://research.xiaojukeji.com/competition/detail.action?competitionId=DiTech2016
+  - directiories in /opt/data/season_1/:
+      - /out  - here will be your ourput
+      - /outdata  - here raw tables
+      - /outdatanorm - here normalized ones
+      - /outtraffic - all traffic predictions
+      - /outweather - weather predictions
 
 For more details see [build.gradle](build.gradle).
 

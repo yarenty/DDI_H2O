@@ -1,20 +1,17 @@
-package com.yarenty.ddi
+package com.yarenty.ddi.raw
 
-
-import java.io.{PrintWriter, File}
+import java.io.{File, FileOutputStream, PrintWriter}
 import java.net.URI
-import java.io.FileOutputStream
 
 import com.yarenty.ddi.schemas.{OutputLine, SMOutputCSVParser}
 import hex.Distribution
-import hex.tree.drf.{DRFModel, DRF}
 import hex.tree.drf.DRFModel.DRFParameters
-import hex.tree.gbm.{GBMModel, GBM}
+import hex.tree.drf.{DRF, DRFModel}
 import hex.tree.gbm.GBMModel.GBMParameters
+import hex.tree.gbm.{GBM, GBMModel}
+import org.apache.spark.h2o.{H2OContext, H2OFrame}
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.{SparkFiles, h2o, SparkContext}
-import org.apache.spark.h2o.{RDD, H2OFrame, DoubleHolder, H2OContext}
-
+import org.apache.spark.{SparkFiles, h2o}
 import water.Key
 import water.fvec.Frame
 import water.support.SparkContextSupport
@@ -26,19 +23,16 @@ import water.support.SparkContextSupport
 object BuildModel extends SparkContextSupport {
 
 
-
-
   val test_imp_dir = "/opt/data/season_1/outdata/day_"
   val train_imp_dir = "/opt/data/season_1/outdata/day_"
 
 
-  def process(h2oContext:H2OContext) {
+  def process(h2oContext: H2OContext) {
 
     import h2oContext._
     import h2oContext.implicits._
     val sc = h2oContext.sparkContext
     implicit val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
 
     println(s"\n\n LETS MODEL\n")
 
@@ -126,11 +120,10 @@ object BuildModel extends SparkContextSupport {
       o.delete()
       outFrame.delete()
       predict.delete()
-       // model.deviance()
+      // model.deviance()
 
     }
     println("=========> off to go!!!")
-
 
 
   }
@@ -143,7 +136,7 @@ object BuildModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 10
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand","weather")
+    params._ignored_columns = Array("id", "weather")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -190,7 +183,7 @@ object BuildModel extends SparkContextSupport {
 
     params._ntrees = 10
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand","weather")
+    params._ignored_columns = Array("id", "weather")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)

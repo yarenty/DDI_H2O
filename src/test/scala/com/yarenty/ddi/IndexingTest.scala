@@ -1,5 +1,6 @@
 package com.yarenty.ddi
 
+import com.yarenty.ddi.raw.DataMunging
 import org.scalatest.FlatSpec
 
 

@@ -1,6 +1,6 @@
 package com.yarenty.ddi.weather
 
-import com.yarenty.ddi.DataMunging
+import com.yarenty.ddi.raw.DataMunging
 import water.parser.{DefaultParserProviders, ParseSetup}
 
 

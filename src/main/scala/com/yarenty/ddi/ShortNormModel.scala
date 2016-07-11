@@ -46,7 +46,7 @@ object ShortNormModel extends SparkContextSupport {
 //    val testset = Array(22,24,26,28,30)
 //    val trainset  = ((1 to 20)++testset).map(i => "2016-01-" + "%02d".format(i)).toArray
 
-    //@TODO: test/present mode
+    //@TODO: test/presentation mode
     val testset = Array("2016-01-22_test")
     val trainset = Array("2016-01-01") ++ testset
 
@@ -56,41 +56,30 @@ object ShortNormModel extends SparkContextSupport {
 
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_"+a))).toSeq
+
     // Use super-fast advanced H2O CSV parser !!!
-    //last will be first ;-)
-    var tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, new URI("file:///" + SparkFiles.get("day_2016-01-21")))
+    val tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, new URI("file:///" + SparkFiles.get("day_2016-01-21")))
 
     var df = asDataFrame(tmpTrain)
 
     println(s" SIZE: ${df.count} ")
 
-    val toDel: Array[H2OFrame] = new Array[H2OFrame](trainset.length)
     //1 by 1 to avoid OOM!
-    var i = 0
     for (tu <- trainURIs) {
-
-      toDel(i) = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
-
-      df = df.unionAll(asDataFrame(toDel(i)))
+      val tmpDF = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
+      df = df.unionAll(asDataFrame(tmpDF))
       println(s" SIZE: ${df.count} ")
-      i += 1
     }
-    println(s" SIZE: ${df.count} ")
-
 
     val data = df.randomSplit(Array(0.8, 0.2), 1) //need to do it twice
     val trainData = asH2OFrame(data(0), "train")
     val testData = asH2OFrame(data(1), "test")
 
-
-    trainData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
-    testData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
-    println(s" TRAIN/TEST DATA CREATED ");
-
+    trainData.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
+    testData.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
 
     println(s"\n===> TRAIN: ${trainData.numRows()}\n")
     println(s"\n===>  TEST: ${testData.numRows()}\n")
-
 
     val gapModel = drfGapOnlyModel(trainData, testData)
 
@@ -98,12 +87,11 @@ object ShortNormModel extends SparkContextSupport {
     val ab = new AutoBuffer (omab,true)
     gapModel.write(ab)
     ab.close()
+    println("MODEL saved!")
 
     for (u <- testURIs) {
-
-
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
-      predictMe.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
+      predictMe.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
 
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec

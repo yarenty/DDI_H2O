@@ -84,7 +84,7 @@ object NormalizedDataMungingTest extends SparkContextSupport {
 
       a.map(pd => {
         x += 2
-        (pd, order_csv + pd, traffic_csv + pd+"_all", weather_csv + pd, x)
+        (pd, order_csv + pd, traffic_csv + pd + "_all", weather_csv + pd, x)
       })
 
 
@@ -112,27 +112,11 @@ object NormalizedDataMungingTest extends SparkContextSupport {
 
 
 
-      //get number of demand drives
-//      val orders: Map[Int, Int] = orderTable.map(row => {
-//        val timeslice = getTimeSlice(row.Time.get)
-//        var from = disctrictMapBR.value.get(row.StartDH.get)
-//        var to = disctrictMapBR.value.get(row.DestDH.get)
-//        if (to == None) to = Option(0)
-//        val indx = getIndex(timeslice, from.get, to.get)
-//        indx
-//      }).groupBy(identity).mapValues(_.size).collect().toMap
-
-
-      val orders : Map[Int,Int] = (1 to 144).map( i =>
-        i -> f._5 % 7
-      ).toMap
-
       //get number of gap drives (did not happen)
       val gaps: Map[Int, Int] = orderTable.map(row => {
         val timeslice = getTimeSlice(row.Time.get)
-        var from = disctrictMapBR.value.get(row.StartDH.get)
-        var to = disctrictMapBR.value.get(row.DestDH.get)
-        if (to == None) to = Option(0)
+        val from = disctrictMapBR.value.get(row.StartDH.get)
+        val to = if (disctrictMapBR.value.get(row.DestDH.get) == None) Option(0) else disctrictMapBR.value.get(row.DestDH.get)
         val indx = getIndex(timeslice, from.get, to.get)
         val gap = row.DriverId.get
         if (gap != "NULL") {
@@ -142,13 +126,12 @@ object NormalizedDataMungingTest extends SparkContextSupport {
         }
       }).groupBy(identity).mapValues(_.size).collect().toMap
 
-      println(s"\n===> ALL ORDERS :: ${orders.size} ")
       println(s"\n===> GAP ORDERS :: ${gaps.size} ")
 
 
 
       val trafficData = new h2o.H2OFrame(TCSVParser.get,
-        new File(SparkFiles.get("t_" + PROCESSED_DAY+ "_all"))) // Use super-fast advanced H2O CSV parser !!!
+        new File(SparkFiles.get("t_" + PROCESSED_DAY + "_all"))) // Use super-fast advanced H2O CSV parser !!!
       println(s"\n===> TRAFFIC via H2O#Frame#count: ${trafficData.numRows()}\n")
 
       val trafficTable: h2o.RDD[PTraffic] = asRDD[PTraffic](trafficData)
@@ -160,10 +143,10 @@ object NormalizedDataMungingTest extends SparkContextSupport {
       val traffic: Map[Int, Tuple4[Double, Double, Double, Double]] = trafficTable.map(row => {
         val ts = row.timeslice.get
         val din = row.district.get
-        val t1 = if (row.t1.isEmpty) row.t1p.get/normFactor else row.t1.get
-        val t2 = if (row.t2.isEmpty) row.t2p.get/normFactor else row.t2.get
-        val t3 = if (row.t3.isEmpty) row.t3p.get/normFactor else row.t3.get
-        val t4 = if (row.t4.isEmpty) row.t4p.get/normFactor else row.t4.get
+        val t1 = if (row.t1.isEmpty) row.t1p.get / normFactor else row.t1.get
+        val t2 = if (row.t2.isEmpty) row.t2p.get / normFactor else row.t2.get
+        val t3 = if (row.t3.isEmpty) row.t3p.get / normFactor else row.t3.get
+        val t4 = if (row.t4.isEmpty) row.t4p.get / normFactor else row.t4.get
         (ts * 100 + din) ->(t1, t2, t3, t4)
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
@@ -181,7 +164,7 @@ object NormalizedDataMungingTest extends SparkContextSupport {
       var weather: Map[Int, Tuple3[Int, Double, Double]] = weatherTable.map(row => {
         row.ts ->(
           row.Weather.get, // not important - train doesnt have some values
-          (20.0 + row.Temperature.get)/40.0, // need to normalize as test data have values outside train!!
+          (20.0 + row.Temperature.get) / 40.0, // need to normalize as test data have values outside train!!
           row.Pollution.get / 100.0)
       }).collect().toMap
       println(s" WEATHER MAP SIZE: ${weather.size}")
@@ -229,7 +212,7 @@ object NormalizedDataMungingTest extends SparkContextSupport {
       //      "25", "25#1", "25#2", "25#3", "25#4", "25#5", "25#6", "25#7", "25#8", "25#9"
 
 
-      val headers = Array("id", "timeslice", "districtID", "destDistrict", "demand", "gap",
+      val headers = Array("id", "timeslice", "districtID", "destDistrict", "day", "gap",
         "traffic1", "traffic2", "traffic3", "traffic4",
         "weather", "temp", "pollution",
         "1", "2", "3", "4", "5", "6", "7", "8", "10",
@@ -242,7 +225,7 @@ object NormalizedDataMungingTest extends SparkContextSupport {
         Vec.T_NUM)
 
       val myData = new h2o.H2OFrame(lineBuilder(headers, types,
-        orders,
+        f._5 % 7,
         gaps,
         traffic,
         weather,
@@ -287,7 +270,7 @@ object NormalizedDataMungingTest extends SparkContextSupport {
 
 
   def lineBuilder(headers: Array[String], types: Array[Byte],
-                  dayOfWeek: Map[Int, Int],
+                  dayOfWeek: Int,
                   gaps: Map[Int, Int],
                   traffic: Map[Int, Tuple4[Double, Double, Double, Double]],
                   weather: Map[Int, Tuple3[Int, Double, Double]],
@@ -321,12 +304,8 @@ object NormalizedDataMungingTest extends SparkContextSupport {
             chunks(3).addNum(dout)
           }
 
-          if (dayOfWeek.contains(ts)) {
-            chunks(4).addNum(dayOfWeek.get(ts).get)
-          }
-          else {
-            chunks(4).addNum(0)
-          }
+          chunks(4).addNum(dayOfWeek)
+
 
 
           if (gaps.contains(idx)) {
