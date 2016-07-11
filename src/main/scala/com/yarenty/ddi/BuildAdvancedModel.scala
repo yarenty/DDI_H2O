@@ -11,10 +11,11 @@ import hex.tree.drf.DRFModel.DRFParameters
 import hex.tree.drf.{DRF, DRFModel}
 import hex.tree.gbm.GBMModel.GBMParameters
 import hex.tree.gbm.{GBM, GBMModel}
+import org.apache.commons.io.FileUtils
 import org.apache.spark.h2o.{H2OContext, H2OFrame}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{h2o, SparkContext, SparkFiles}
-import water.Key
+import water.{AutoBuffer, Key}
 import water.fvec.{Vec, Frame}
 import water.parser.{ParseSetup, ParseDataset}
 import water.support.SparkContextSupport
@@ -53,7 +54,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     var tmpTest = new h2o.H2OFrame(SMOutputCSVParser.get, testURIs(0))
     var dfTest = asDataFrame(tmpTest)
 
-    //1 by 1 to avoid OOM!
+//    1 by 1 to avoid OOM!
     for (tu <- testURIs.drop(1)) {
       val tmp = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
       dfTest = dfTest.unionAll(asDataFrame(tmp))
@@ -61,8 +62,8 @@ object BuildAdvancedModel extends SparkContextSupport {
     }
     val testData = asH2OFrame(dfTest,"test")
 
-
-    val trainset  = (1 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
+                   //@TODO: 1 to 21
+    val trainset  = (17 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
     var tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get,trainURIs(0) )
@@ -74,6 +75,12 @@ object BuildAdvancedModel extends SparkContextSupport {
       dfTrain = dfTrain.unionAll(asDataFrame(tmp))
       println(s" SIZE: ${dfTrain.count} ")
     }
+
+
+//    val data = dfTrain.randomSplit(Array(0.8, 0.2), 1) //need to do it twice
+//    val trainData = asH2OFrame(data(0), "train")
+//    val testData = asH2OFrame(data(1), "test")
+
     val trainData = asH2OFrame(dfTrain,"train")
 
 
@@ -87,23 +94,6 @@ object BuildAdvancedModel extends SparkContextSupport {
     println(s"\n===>  TEST: ${testData.numRows()}\n")
 
 
-//    val demandModel = dlDemandModel(trainData, testData)
-//
-//    val predictDemandT = demandModel.score(trainData)
-//    val vecDemandT = predictDemandT.get.lastVec
-//    //trainData.add("pdemand", vecDemandT)
-//    trainData.insertVec(0,"pdemand",vecDemandT)
-//    println(s" TRAIN Demand prediction created  ${trainData.find("pdemand")} ");
-//
-//    val predictDemandV = demandModel.score(testData)
-//    val vecDemandV = predictDemandV.get.lastVec
-//    //testData.add("pdemand", vecDemandV)
-//    testData.insertVec(0,"pdemand",vecDemandV)
-//    println(s" TEST Demand prediction created: ${testData.find("pdemand")} ");
-//
-
-
-
     val gapModel = drfGapModel(trainData, testData)
 //    val gapModel = dlGapModel(trainData, testData)
     // SAVE THE MODEL!!!
@@ -111,15 +101,21 @@ object BuildAdvancedModel extends SparkContextSupport {
     gapModel.toJava(om, false, false)
 
 
+    val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex")
+    val ab = new AutoBuffer (omab,true)
+    gapModel.write(ab)
+    ab.close()
+
     for (u <- testURIs) {
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
       predictMe.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
 
+
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec
 
-      println("OUT VECTOR:" + vec.length)
       predictMe.add("predict", vec)
+      println("OUT VECTOR:" + vec.length)
       saveOutput(predictMe, u.toString)
     }
     println("=========> off to go!!!")
@@ -162,11 +158,19 @@ object BuildAdvancedModel extends SparkContextSupport {
     val n = fName.split("/")
     val name = n(n.length - 1)
     val csv = o.toCSV(true, false)
-    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + "_full.csv"))
+    val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + ".csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
     }
     csv_writer.close
+
+
+    val csvfull = odf.toCSV(true, false)
+    val csvfull_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + "_full.csv"))
+    while (csvfull.available() > 0) {
+      csvfull_writer.write(csvfull.read.toChar)
+    }
+    csvfull_writer.close
 
     println(s" CSV created: /opt/data/season_1/out/final_" + name + "_full.csv")
 
@@ -236,12 +240,12 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
 
-    params._ntrees = 10  //@todo remove
+    params._ntrees = 20  //@todo remove
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "weather")    //demand is day of week
-    params._ignore_const_cols = true
-//    params._nbins = 100
-//    params._max_depth = 50
+    params._ignored_columns = Array("id", "weather","temp")    //demand is day of week
+    params._ignore_const_cols = false
+    params._nbins = 100
+    params._max_depth = 50
 
 
     println("PARAMS:" + params.fullName)

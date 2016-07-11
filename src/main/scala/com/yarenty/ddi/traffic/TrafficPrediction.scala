@@ -173,7 +173,7 @@ object TrafficPrediction extends SparkContextSupport {
         .filter(!_.isWrongRow())
 
 
-      var traffic: Map[Int, Tuple7[Int, Int, Int, Int, Int, Int, Int]] = trafficTable.map(row => {
+      val traffic: Map[Int, Tuple7[Int, Int, Int, Int, Int, Int, Int]] = trafficTable.map(row => {
         val ts = getTimeSlice(row.Time.get)
         if (ts < 1) println(s" WRONG TIME: ${row.Time} ")
         val din = districts.get(row.DistrictHash.get).get

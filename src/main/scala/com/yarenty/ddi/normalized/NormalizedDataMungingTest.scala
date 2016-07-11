@@ -155,44 +155,18 @@ object NormalizedDataMungingTest extends SparkContextSupport {
       println(s"\n===> TRAFFIC in ${f._3} via RDD#count call: ${trafficTable.count()}\n")
 
 
-      //@TODO: add traffic window!
-      var traffic: Map[Int, Tuple4[Double, Double, Double, Double]] = trafficTable.map(row => {
+      //@TODO: add traffic window!    - at the moment simple normalization
+      val normFactor = 4.0
+      val traffic: Map[Int, Tuple4[Double, Double, Double, Double]] = trafficTable.map(row => {
         val ts = row.timeslice.get
         val din = row.district.get
-        val t1 = if (row.t1.isEmpty) row.t1p.get else row.t1.get
-        val t2 = if (row.t2.isEmpty) row.t2p.get else row.t2.get
-        val t3 = if (row.t3.isEmpty) row.t3p.get else row.t3.get
-        val t4 = if (row.t4.isEmpty) row.t4p.get else row.t4.get
+        val t1 = if (row.t1.isEmpty) row.t1p.get/normFactor else row.t1.get
+        val t2 = if (row.t2.isEmpty) row.t2p.get/normFactor else row.t2.get
+        val t3 = if (row.t3.isEmpty) row.t3p.get/normFactor else row.t3.get
+        val t4 = if (row.t4.isEmpty) row.t4p.get/normFactor else row.t4.get
         (ts * 100 + din) ->(t1, t2, t3, t4)
       }).collect().toMap
       println(s" TRAFFIC MAP SIZE: ${traffic.size}")
-
-//
-//      var filledTraffic: Tuple4[Int, Int, Int, Int] = (0, 0, 0, 0)
-//      //fill traffic
-//      for (din <- 1 to 66) {
-//        for (i <- 1 to 144) {
-//          val idx = i * 100 + din
-//          if (traffic.contains(idx)) {
-//            filledTraffic = traffic.get(idx).get
-//          }
-//        }
-//        for (i <- 1 to 144) {
-//          val idx = i * 100 + din
-//          if (traffic.contains(idx)) {
-//            filledTraffic = traffic.get(idx).get
-//          } else {
-//            traffic += idx -> filledTraffic
-//          }
-//        }
-//      }
-      //val normFactor = 1000.0
-//val normalizedTraffic: Map[Int, Tuple4[Double, Double, Double, Double]] = traffic.map(x =>
-// x._1 ->  (x._2._1.toDouble / 2000.0, x._2._2.toDouble / 1000.0, x._2._3.toDouble / 400.0, x._2._4.toDouble / 200.0)
-//)
-      println(s" TRAFFIC MAP SIZE AFTER FILL: ${traffic.size}")
-
-
 
 
 

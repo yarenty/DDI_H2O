@@ -1,5 +1,6 @@
 // Apply the java plugin to add support for Java
 apply plugin: 'scala'
+apply plugin: 'java'
 // Support idea and Eclipse IDEs
 apply plugin: 'idea'
 apply plugin: 'eclipse'

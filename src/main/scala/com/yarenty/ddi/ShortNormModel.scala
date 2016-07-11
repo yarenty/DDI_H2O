@@ -17,7 +17,7 @@ import org.apache.spark.h2o.{H2OContext, H2OFrame}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkContext, SparkFiles, h2o}
-import water.Key
+import water.{AutoBuffer, Key}
 import water.fvec.Frame
 import water.support.SparkContextSupport
 
@@ -83,8 +83,8 @@ object ShortNormModel extends SparkContextSupport {
     val testData = asH2OFrame(data(1), "test")
 
 
-    trainData.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
-    testData.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
+    trainData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
+    testData.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
     println(s" TRAIN/TEST DATA CREATED ");
 
 
@@ -92,32 +92,18 @@ object ShortNormModel extends SparkContextSupport {
     println(s"\n===>  TEST: ${testData.numRows()}\n")
 
 
-//    val demandModel = dlDemandModel(trainData, testData)
-//
-//    val predictDemandT = demandModel.score(trainData)
-//    val vecDemandT = predictDemandT.get.lastVec
-//    //trainData.add("pdemand", vecDemandT)
-//    trainData.insertVec(0,"pdemand",vecDemandT)
-//    println(s" TRAIN Demand prediction created  ${trainData.find("pdemand")} ");
-//
-//    val predictDemandV = demandModel.score(testData)
-//    val vecDemandV = predictDemandV.get.lastVec
-//    //testData.add("pdemand", vecDemandV)
-//    testData.insertVec(0,"pdemand",vecDemandV)
-//    println(s" TEST Demand prediction created: ${testData.find("pdemand")} ");
-//
-
-
-
     val gapModel = drfGapOnlyModel(trainData, testData)
-    // SAVE THE MODEL!!!
-    val om = new FileOutputStream("/opt/data/GRFGAPOnlyModel_" + System.currentTimeMillis() + ".java")
-    gapModel.toJava(om, false, false)
 
+    val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex_very_simple")
+    val ab = new AutoBuffer (omab,true)
+    gapModel.write(ab)
+    ab.close()
 
     for (u <- testURIs) {
+
+
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
-      predictMe.colToEnum(Array("timeslice", "districtID", "destDistrict", "weather"))
+      predictMe.colToEnum(Array("demand","timeslice", "districtID", "destDistrict", "weather"))
 
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec
@@ -242,7 +228,7 @@ object ShortNormModel extends SparkContextSupport {
     params._valid = smOutputTest.key
 
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "demand", "weather")
+    params._ignored_columns = Array("id", "weather")
     params._ignore_const_cols = true
     params._ntrees = 20
 

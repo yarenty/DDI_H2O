@@ -57,7 +57,6 @@ object TrafficPredic extends SparkContextSupport {
     smOutputTest.colToEnum(Array("day","timeslice", "district"))
 
 
-
     println(s"\n===> TRAIN: ${smOutputTrain.numRows()}\n")
     println(s"\n===> TEST: ${smOutputTest.numRows()}\n")
 
@@ -74,32 +73,24 @@ object TrafficPredic extends SparkContextSupport {
       val smOutputPredict = new h2o.H2OFrame(TPCSVParser.get, new URI("file:///" + SparkFiles.get("t_" + pu)))
       smOutputPredict.colToEnum(Array("day","timeslice", "district"))
       val predictT1Demand = t1Model.score(smOutputPredict)
-      var vecT1 = predictT1Demand.get.lastVec
+      val vecT1 = predictT1Demand.get.lastVec
       smOutputPredict.add("t1p", vecT1)
 
-
       val predictT2Demand = t2Model.score(smOutputPredict)
-      var vecT2 = predictT2Demand.get.lastVec
+      val vecT2 = predictT2Demand.get.lastVec
       smOutputPredict.add("t2p", vecT2)
 
-
       val predictT3Demand = t3Model.score(smOutputPredict)
-      var vecT3 = predictT3Demand.get.lastVec
+      val vecT3 = predictT3Demand.get.lastVec
       smOutputPredict.add("t3p", vecT3)
 
       val predictT4Demand = t4Model.score(smOutputPredict)
-      var vecT4 = predictT4Demand.get.lastVec
+      val vecT4 = predictT4Demand.get.lastVec
       smOutputPredict.add("t4p", vecT4)
 
-
-
       saveOutput(smOutputPredict,pu)
-
-
     }
     println("=========> off to go!!!")
-
-
   }
 
 
