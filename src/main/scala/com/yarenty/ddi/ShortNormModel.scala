@@ -48,12 +48,12 @@ object ShortNormModel extends SparkContextSupport {
 
     //@TODO: test/presentation mode
     val testset = Array("2016-01-22_test")
-    val trainset = Array("2016-01-01") ++ testset
+    val trainset = Array("2016-01-20")
 
 
     addFiles(sc, absPath(data_dir + "2016-01-21"))
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
-
+    for (p <- testset) addFiles(sc, absPath(data_dir + p))
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
     val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_"+a))).toSeq
 
@@ -71,9 +71,13 @@ object ShortNormModel extends SparkContextSupport {
       println(s" SIZE: ${df.count} ")
     }
 
-    val data = df.randomSplit(Array(0.8, 0.2), 1) //need to do it twice
-    val trainData = asH2OFrame(data(0), "train")
-    val testData = asH2OFrame(data(1), "test")
+//    val data = df.randomSplit(Array(0.8, 0.2), 1) //need to do it twice
+//    val trainData = asH2OFrame(data(0), "train")
+//    val testData = asH2OFrame(data(1), "test")
+
+    val trainData = asH2OFrame(df)
+    val testData = new h2o.H2OFrame(SMOutputCSVParser.get,testURIs(0))
+
 
     trainData.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
     testData.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
@@ -117,21 +121,20 @@ object ShortNormModel extends SparkContextSupport {
     val out = new Frame(key, names, smOutputTest.vecs(names))
     val zz = new h2o.H2OFrame(out)
     val odf = asDataFrame(zz)
+    odf.registerTempTable("out")
 
-
-    val o = odf.groupBy("timeslice", "districtID").agg(Map(
-      "gap" -> "sum",
-      "predict" -> "sum"
-    ))
-    o.rename("sum(gap)", "gap")
-    o.rename("sum(predict)", "predict")
+    //filtering
+    val a = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.5,cast(0.0 as double), predict) as predict from out")
+    a.registerTempTable("gaps")
+    val o = sqlContext.sql(" select timeslice, districtID, sum(gap) as gap, sum(predict) as predict from gaps " +
+      "  group by timeslice,districtID")
     o.take(20).foreach(println)
     val toSee = new H2OFrame(o)
     println(s" output should be visible now ")
 
     val n = fName.split("/")
     val name = n(n.length - 1)
-    val csv = o.toCSV(false, false)
+    val csv = o.toCSV(true, false)
     val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/short_" + name + ".csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
@@ -160,7 +163,7 @@ object ShortNormModel extends SparkContextSupport {
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id","demand","weather")
+    params._ignored_columns = Array("id","day","weather")
     params._ignore_const_cols = true
 
     println("PARAMS:" + params)
@@ -207,9 +210,10 @@ object ShortNormModel extends SparkContextSupport {
     params._valid = smOutputTest.key
 
     params._response_column = "gap"
-    params._ignored_columns = Array("id", "weather")
+    params._ignored_columns = Array("id", "weather", "temp","day")
     params._ignore_const_cols = true
-    params._ntrees = 20
+    params._ntrees = 30
+    params._seed = -8944624520644421113L  //3.54 {20}
 
     println("PARAMS:" + params.fullName)
     val drf = new DRF(params)

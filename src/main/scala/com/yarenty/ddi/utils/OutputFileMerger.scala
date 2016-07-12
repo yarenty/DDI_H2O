@@ -3,12 +3,16 @@ package com.yarenty.ddi.utils
 import java.io.{File, FileInputStream, PrintWriter}
 import java.net.URI
 
+import com.yarenty.ddi.MLProcessor._
 import com.yarenty.ddi.MLProcessor.h2oContext._
 import com.yarenty.ddi.schemas.OutputCSVParser
-import org.apache.spark.h2o.{H2OContext, H2OFrame}
+import org.apache.spark.h2o.{RDD, H2OContext, H2OFrame}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkFiles, h2o}
+import water.MRTask
 import water.fvec.Frame
+
+import water.fvec.Chunk
 import water.support.SparkContextSupport
 
 
@@ -34,15 +38,26 @@ object OutputFileMerger extends SparkContextSupport {
     val outURIs = outset.map(a => new URI("file:///" + SparkFiles.get("final_day_" + a))).toSeq
 
     val tmpTrain = new h2o.H2OFrame(OutputCSVParser.get, outURIs(0))
-    var dfTrain = asDataFrame(tmpTrain)
 
-    //1 by 1 to avoid OOM!
+    var dfTrain = asDataFrame(tmpTrain)
+    dfTrain.registerTempTable("out")
+
+    //filtering
+   var a = sqlContext.sql("select concat('2016-01-22_', timeslice) as timeslice, districtID, gap, predict from out")
+
     for (tu <- outURIs.drop(1)) {
       val tmp = new h2o.H2OFrame(OutputCSVParser.get, tu)
-      dfTrain = dfTrain.unionAll(asDataFrame(tmp))
+      val tT = asDataFrame(tmp)
+      tT.registerTempTable("b")
+
+      val n = tu.toString.split("/")
+      val name = n(n.length - 1).substring(10,21)
+      val b = sqlContext.sql("select concat('"+name+"',timeslice) as timeslice, districtID, gap, predict from b")
+      a = a.unionAll(b)
+
     }
 
-    saveOutput(dfTrain)
+    saveOutput(asH2OFrame(a))
 
     println("FINAL FILE delivered")
   }

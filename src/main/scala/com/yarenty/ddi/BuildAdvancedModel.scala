@@ -63,7 +63,7 @@ object BuildAdvancedModel extends SparkContextSupport {
     //    val testData = asH2OFrame(dfTest,"test")
 
     //@TODO: 1 to 21
-    val trainset = (14 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
+    val trainset = (1 to 21).map(i => "2016-01-" + "%02d".format(i)).toArray
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
     val tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs(0))
@@ -147,12 +147,12 @@ object BuildAdvancedModel extends SparkContextSupport {
     csv_writer.close
 
 
-    val csvfull = odf.toCSV(true, false)
-    val csvfull_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + "_full.csv"))
-    while (csvfull.available() > 0) {
-      csvfull_writer.write(csvfull.read.toChar)
-    }
-    csvfull_writer.close
+//    val csvfull = odf.toCSV(true, false)
+//    val csvfull_writer = new PrintWriter(new File("/opt/data/season_1/out/final_" + name + "_full.csv"))
+//    while (csvfull.available() > 0) {
+//      csvfull_writer.write(csvfull.read.toChar)
+//    }
+//    csvfull_writer.close
 
     println(s" CSV created: /opt/data/season_1/out/final_" + name + ".csv")
 
@@ -213,12 +213,13 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
 
-    params._ntrees = 20 //@todo use more
+    params._ntrees = 30 //@todo use more
     params._response_column = "gap"
     params._ignored_columns = Array("id", "weather", "temp")
     params._ignore_const_cols = false
-    //    params._nbins = 50
-    //    params._max_depth = 10
+//    params._nbins = 100
+//    params._max_depth = 50
+    params._seed = -8944624520644421113L
 
     println("BUILDING:" + params.fullName)
     val drf = new DRF(params)
