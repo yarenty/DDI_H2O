@@ -21,6 +21,7 @@ import water.{AutoBuffer, Key}
 import water.fvec.Frame
 import water.support.SparkContextSupport
 
+
 /**
   * Created by yarenty on 30/06/2016.
   * (C)2015 SkyCorp Ltd.
@@ -34,114 +35,115 @@ object ShortNormModel extends SparkContextSupport {
   def process(h2oContext: H2OContext) {
 
     val sc = h2oContext.sparkContext
-
     import h2oContext._
     import h2oContext.implicits._
     implicit val sqlContext = new SQLContext(sc)
 
 
-    println(s"\n\n LETS MODEL\n")
 
-
-//    val testset = Array(22,24,26,28,30)
-//    val trainset  = ((1 to 20)++testset).map(i => "2016-01-" + "%02d".format(i)).toArray
-
-    //@TODO: test/presentation mode
-    val testset = Array("2016-01-22_test")
-    val trainset = Array("2016-01-20")
-
-
-    addFiles(sc, absPath(data_dir + "2016-01-21"))
+    println(">>>PHASE::LOADING TRAIN DATA")
+    //@TODO: this is test/presentation mode
+    //    val trainset  = ((1 to 20)++testset).map(i => "2016-01-" + "%02d".format(i)).toArray   //fullmode
+    val trainset = Array("2016-01-20","2016-01-21")
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
-    for (p <- testset) addFiles(sc, absPath(data_dir + p))
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
-    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_"+a))).toSeq
-
-    // Use super-fast advanced H2O CSV parser !!!
-    val tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, new URI("file:///" + SparkFiles.get("day_2016-01-21")))
-
-    var df = asDataFrame(tmpTrain)
-
-    println(s" SIZE: ${df.count} ")
 
     //1 by 1 to avoid OOM!
-    for (tu <- trainURIs) {
+    val tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs(0))
+    var df = asDataFrame(tmpTrain)
+    for (tu <- trainURIs.drop(1)) {
       val tmpDF = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
       df = df.unionAll(asDataFrame(tmpDF))
       println(s" SIZE: ${df.count} ")
     }
 
-//    val data = df.randomSplit(Array(0.8, 0.2), 1) //need to do it twice
+    val trainData = asH2OFrame(df)
+//    val data = df.randomSplit(Array(0.8, 0.2), 1)
 //    val trainData = asH2OFrame(data(0), "train")
 //    val testData = asH2OFrame(data(1), "test")
 
-    val trainData = asH2OFrame(df)
-    val testData = new h2o.H2OFrame(SMOutputCSVParser.get,testURIs(0))
 
+
+    println(">>>PHASE::LOADING TEST/VALIDATION DATA")
+    //    val testset = Array(22,24,26,28,30)  //full mode
+    val testset = Array("2016-01-22_test")
+    for (p <- testset) addFiles(sc, absPath(data_dir + p))
+    val testURIs = testset.map(a => new URI("file:///" + SparkFiles.get("day_"+a))).toSeq
+    val testData = new h2o.H2OFrame(SMOutputCSVParser.get,testURIs(0))
 
     trainData.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
     testData.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
-
     println(s"\n===> TRAIN: ${trainData.numRows()}\n")
     println(s"\n===>  TEST: ${testData.numRows()}\n")
 
+
+
+
+    println(">>>PHASE::MODELING")
     val gapModel = drfGapOnlyModel(trainData, testData)
 
+
+    println(">>>PHASE: SAVE MODEL FOR FUTURE USE")
     val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex_very_simple")
     val ab = new AutoBuffer(omab,true)
     gapModel.write(ab)
     ab.close()
-    println("MODEL saved!")
+    println("model saved!")
 
+
+
+
+    println(">>>PHASE::PREDICTION")
     for (u <- testURIs) {
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
       predictMe.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
 
       val predict = gapModel.score(predictMe)
       val vec = predict.get.lastVec
-
-      println("OUT VECTOR:" + vec.length)
       predictMe.add("predict", vec)
       saveOutput(predictMe, u.toString,sc)
     }
+
+    println(">>>END")
     println("=========> off to go!!!")
   }
 
 
 
 
-
-
-  def saveOutput(smOutputTest: H2OFrame, fName: String, sc: SparkContext): Unit = {
+  /**
+    * Saving output into CSV file
+    * @param frame
+    * @param fName
+    * @param sc
+    */
+  def saveOutput(frame: H2OFrame, fName: String, sc: SparkContext): Unit = {
 
     import MLProcessor.sqlContext
     val names = Array("timeslice", "districtID", "gap", "predict")
-
     val key = Key.make("output").asInstanceOf[Key[Frame]]
-    val out = new Frame(key, names, smOutputTest.vecs(names))
-    val zz = new h2o.H2OFrame(out)
-    val odf = asDataFrame(zz)
-    odf.registerTempTable("out")
+    val output = new Frame(key, names, frame.vecs(names))
+    val odf = asDataFrame(new h2o.H2OFrame(output))
 
-    //filtering
-    val a = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.5,cast(0.0 as double), predict) as predict from out")
-    a.registerTempTable("gaps")
-    val o = sqlContext.sql(" select timeslice, districtID, sum(gap) as gap, sum(predict) as predict from gaps " +
-      "  group by timeslice,districtID")
-    o.take(20).foreach(println)
-    val toSee = new H2OFrame(o)
+    odf.registerTempTable("out")
+    val filter = sqlContext.sql("select timeslice, districtID, gap, IF(predict<0.5,cast(0.0 as double), predict) as predict from out")
+    filter.registerTempTable("gaps")
+    val predictions = sqlContext.sql(" select timeslice, districtID, sum(gap) as gap, sum(predict) as predict from gaps  group by timeslice, districtID")
+
+    predictions.take(20).foreach(println)
+    val toSee = new H2OFrame(predictions)
     println(s" output should be visible now ")
 
     val n = fName.split("/")
     val name = n(n.length - 1)
-    val csv = o.toCSV(true, false)
+    val csv = predictions.toCSV(true, false)
     val csv_writer = new PrintWriter(new File("/opt/data/season_1/out/short_" + name + ".csv"))
     while (csv.available() > 0) {
       csv_writer.write(csv.read.toChar)
     }
     csv_writer.close
 
-    println(s" CSV created: /opt/data/season_1/out/short_" + name + ".csv")
+    println(s" CSV created in: /opt/data/season_1/out/short_" + name + ".csv")
 
   }
 
@@ -152,27 +154,23 @@ object ShortNormModel extends SparkContextSupport {
     *
     * MODELS
     *
-    *
     ******************************************************/
 
 
-  def gbmModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): GBMModel = {
+  def gbmGapModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): GBMModel = {
 
     val params = new GBMParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._ntrees = 100
     params._response_column = "gap"
-    params._ignored_columns = Array("id","day","weather")
+    params._ignored_columns = Array("id","day","weather","temp")
     params._ignore_const_cols = true
+    params._score_each_iteration = true
 
-    println("PARAMS:" + params)
+    println("MODEL:" + params)
     val gbm = new GBM(params)
-
-    println("GBM:" + gbm)
-
     gbm.trainModel.get
-
   }
 
 
@@ -212,14 +210,13 @@ object ShortNormModel extends SparkContextSupport {
     params._response_column = "gap"
     params._ignored_columns = Array("id", "weather", "temp","day")
     params._ignore_const_cols = true
-    params._ntrees = 30
-    params._seed = -8944624520644421113L  //3.54 {20}
+    params._ntrees = 10
+    params._max_depth = 20
+    params._seed = -584220444440873026L
+    params._score_each_iteration = true
 
-    println("PARAMS:" + params.fullName)
+    println("MODEL:" + params.fullName)
     val drf = new DRF(params)
-
-
-    println("DRF:" + drf)
     drf.trainModel.get
   }
 
@@ -230,7 +227,7 @@ object ShortNormModel extends SparkContextSupport {
   //buildModel 'deeplearning', {"model_id":"deeplearning-9c73716a-1790-4fa1-a116-79ffa8f93133",
   // "training_frame":"train","validation_frame":"day_2016_01_22_test.hex",
   // "nfolds":0,"response_column":"gap",
-  // "ignored_columns":["id","demand"],
+  // "ignored_columns":["id","day","weather"],
   // "ignore_const_cols":true,"activation":"Rectifier",
   // "hidden":[200,200],"epochs":10,"
   // variable_importances":false,"score_each_iteration":false,"checkpoint":"",
@@ -239,28 +236,26 @@ object ShortNormModel extends SparkContextSupport {
   // "mini_batch_size":"10","elastic_averaging":false}
 
 
-  def dlDemandModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DeepLearningModel = {
+  def dlGapModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DeepLearningModel = {
 
     val params = new DeepLearningParameters()
     params._train = smOutputTrain.key
     params._valid = smOutputTest.key
     params._distribution = Distribution.Family.gaussian
-    params._response_column = "demand"
-    params._ignored_columns = Array("id", "gap","weather")
+    params._response_column = "gap"
+    params._ignored_columns = Array("id", "weather", "temp", "day")  //day as too small
     params._ignore_const_cols = true
-    params._standardize = false
+    params._standardize = false   //data is standardized
+    params._score_each_iteration = true
 
     //@TODO: removeme  (do bigger stuff)
     params._hidden = Array(40,40)
     params._mini_batch_size = 10
     params._epochs = 1.0
 
-    println("PARAMS:" + params.fullName)
+    println("MODEL:" + params.fullName)
     val drf = new DeepLearning(params)
-
-    println("DRF:" + drf)
     drf.trainModel.get
-
   }
 
 }
