@@ -52,13 +52,22 @@ object PredictModel extends SparkContextSupport {
     val gapModel = new DRFModel(null, null, null)
     println("loading...")
 
-    val omab = new FileInputStream("/opt/data/DRFGapModel_1468245928478.hex_very_simple")
+    val omab = new FileInputStream("/opt/data/season_1/out_238/DRFGapModel_1468245182413.hex")
+//    val omab = new FileInputStream("/opt/data/DRFGapModel_1468326363229.txt")
+
     val ab = new AutoBuffer(omab)
     gapModel.read(ab)
     //gapModel
     println("MODEL LOADED")
    // ab.close()
     println("finally...")
+
+    println(gapModel.toString)
+
+    println("     _seed:"+gapModel._parms._seed)
+    println("_max_depth:"+gapModel._parms._max_depth)
+    println("    _nbins:"+gapModel._parms._nbins)
+    println("   _ntrees:"+gapModel._parms._ntrees)
 
 
     for (u <- testURIs) {

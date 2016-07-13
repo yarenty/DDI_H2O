@@ -41,16 +41,17 @@ object ShortNormModel extends SparkContextSupport {
 
 
 
-    println(">>>PHASE::LOADING TRAIN DATA")
+    println(">>>  PHASE :: LOADING TRAIN DATA")
     //@TODO: this is test/presentation mode
     //    val trainset  = ((1 to 20)++testset).map(i => "2016-01-" + "%02d".format(i)).toArray   //fullmode
-    val trainset = Array("2016-01-20","2016-01-21")
+    val trainset = Array("2016-01-21","2016-01-20")
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
     val trainURIs = trainset.map(a => new URI("file:///" + SparkFiles.get("day_" + a))).toSeq
 
     //1 by 1 to avoid OOM!
     val tmpTrain = new h2o.H2OFrame(SMOutputCSVParser.get, trainURIs(0))
     var df = asDataFrame(tmpTrain)
+    println(s" SIZE: ${df.count} ")
     for (tu <- trainURIs.drop(1)) {
       val tmpDF = new h2o.H2OFrame(SMOutputCSVParser.get, tu)
       df = df.unionAll(asDataFrame(tmpDF))
@@ -64,7 +65,7 @@ object ShortNormModel extends SparkContextSupport {
 
 
 
-    println(">>>PHASE::LOADING TEST/VALIDATION DATA")
+    println(">>>  PHASE :: LOADING TEST/VALIDATION DATA")
     //    val testset = Array(22,24,26,28,30)  //full mode
     val testset = Array("2016-01-22_test")
     for (p <- testset) addFiles(sc, absPath(data_dir + p))
@@ -79,11 +80,11 @@ object ShortNormModel extends SparkContextSupport {
 
 
 
-    println(">>>PHASE::MODELING")
-    val gapModel = drfGapOnlyModel(trainData, testData)
+    println(">>>  PHASE :: MODELING")
+    val gapModel = drfGapModel(trainData, testData)
 
 
-    println(">>>PHASE: SAVE MODEL FOR FUTURE USE")
+    println(">>>  PHASE :: SAVE MODEL FOR FUTURE USE")
     val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex_very_simple")
     val ab = new AutoBuffer(omab,true)
     gapModel.write(ab)
@@ -93,7 +94,7 @@ object ShortNormModel extends SparkContextSupport {
 
 
 
-    println(">>>PHASE::PREDICTION")
+    println(">>>  PHASE :: PREDICTION")
     for (u <- testURIs) {
       val predictMe = new h2o.H2OFrame(SMOutputCSVParser.get, u)
       predictMe.colToEnum(Array("day","timeslice", "districtID", "destDistrict", "weather"))
@@ -104,7 +105,7 @@ object ShortNormModel extends SparkContextSupport {
       saveOutput(predictMe, u.toString,sc)
     }
 
-    println(">>>END")
+    println(">>>  END")
     println("=========> off to go!!!")
   }
 
@@ -201,7 +202,7 @@ object ShortNormModel extends SparkContextSupport {
 
 
 
-  def drfGapOnlyModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
+  def drfGapModel(smOutputTrain: H2OFrame, smOutputTest: H2OFrame): DRFModel = {
 
     val params = new DRFParameters()
     params._train = smOutputTrain.key
@@ -245,11 +246,15 @@ object ShortNormModel extends SparkContextSupport {
     params._response_column = "gap"
     params._ignored_columns = Array("id", "weather", "temp", "day")  //day as too small
     params._ignore_const_cols = true
-    params._standardize = false   //data is standardized
+    params._standardize = true   //data is standardized
     params._score_each_iteration = true
 
-    //@TODO: removeme  (do bigger stuff)
-    params._hidden = Array(40,40)
+
+//    params._hidden = Array(200,200) //Feel Lucky   - 3.17
+//    params._hidden = Array(512) //Eagle Eye     -4.67
+    params._hidden = Array(64,64,64) //Puppy Brain   -2.64
+//    params._hidden = Array(32,32,32,32,32) //Junior Chess Master  (params._standardize = false)  2.88
+
     params._mini_batch_size = 10
     params._epochs = 1.0
 

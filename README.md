@@ -1,4 +1,4 @@
-# DDI on H2O project
+# DiDi Algorithm Competition on H2O
 
 Lets play.
 
@@ -16,6 +16,32 @@ Sparkling Water 1.6.5 which integrates:
 
 For more details see [build.gradle](build.gradle).
 
+## Status
+
+- Step 1: Data preparation
+- Step 2: Data munging - raw
+    - weather
+    - traffic
+    - POI
+- Step 3: Data munging - filling
+    - weather - based on previous data
+    - traffic - use DRF predictions
+    - POI - merge (too big for 16G RAM)
+- Step 4: Machine Learning
+    - GBM - done/ quite bad output
+    - DRF ! - very good - current best 2.39
+    - DL - partially - need more investigation  (2.88 at small test)
+- Presentation mode: get 2 train days - predict 1 test day
+
+## TODO
+- set proper DRF traffic seeds - to have repeatable output!
+- check DL with different configs (exp: Puppy Brain)
+- 2 phase predictions: first on "demand" then on "gap"
+- move to bigger server and use full POI
+- build models for each district - then no need for POI (same for traffics)
+
+
+
 ## Project structure
  
 ```
@@ -28,6 +54,8 @@ For more details see [build.gradle](build.gradle).
 ├─ build.gradle   - Build file for this project
 ├─ gradlew        - Gradle wrapper 
 ```
+
+
 
 ## Project building
 

@@ -118,6 +118,7 @@ object TrafficPredic extends SparkContextSupport {
     params._response_column = "t1"
     params._ignored_columns = Array("t2", "t3", "t4")
     params._ignore_const_cols = true
+    params._seed = 1L       //TODO:find better seeds!!
 
     println("PARAMS:" + params)
     val nb = new DRF(params)
@@ -132,6 +133,7 @@ object TrafficPredic extends SparkContextSupport {
     params._response_column = "t2"
     params._ignored_columns = Array("t1", "t3", "t4")
     params._ignore_const_cols = true
+    params._seed = 1L
 
     println("PARAMS:" + params)
     val nb = new DRF(params)
@@ -146,6 +148,7 @@ object TrafficPredic extends SparkContextSupport {
     params._response_column = "t3"
     params._ignored_columns = Array("t2", "t1", "t4")
     params._ignore_const_cols = true
+    params._seed = 1L
 
     println("PARAMS:" + params)
     val nb = new DRF(params)
@@ -160,6 +163,7 @@ object TrafficPredic extends SparkContextSupport {
     params._response_column = "t4"
     params._ignored_columns = Array("t2", "t3", "t1")
     params._ignore_const_cols = true
+    params._seed = 1L
 
     println("PARAMS:" + params)
     val nb = new DRF(params)
