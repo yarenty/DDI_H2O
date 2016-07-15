@@ -35,24 +35,23 @@ object MLProcessor extends SparkContextSupport {
     println(s"\n\n H2O CONTEXT is HERE !!!!!!\n")
 
 
-//    TrafficPredictionTrain.process(h2oContext)
-//    TrafficPredictionTest.process(h2oContext)
-//    TrafficPrediction.process(h2oContext)
-//    TrafficPredic.process(h2oContext)
+    TrafficPredictionTrain.process(h2oContext)
+    TrafficPredictionTest.process(h2oContext)
+    TrafficPrediction.process(h2oContext)
+    TrafficPredic.process(h2oContext)
 
     // DataMunging.process(h2oContext) //- not really working anymore
     // BuildModel.process(h2oContext)  //- big error
 
-//    NormalizedDataMunging.process(h2oContext)
-//    NormalizedDataMungingTest.process(h2oContext)
+    NormalizedDataMunging.process(h2oContext)
+    NormalizedDataMungingTest.process(h2oContext)
 
     BuildAdvancedModel.process(h2oContext)
     OutputFileMerger.process(h2oContext)
 
+//      ShortNormModel.process(h2oContext)
 
-//     ShortNormModel.process(h2oContext)
-
-    // PredictModel.process(h2oContext)
+//      PredictModel.process(h2oContext)
 
     // Shutdown Spark cluster and H2O
     // h2oContext.stop(stopSparkContext = true)
