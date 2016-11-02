@@ -42,7 +42,7 @@ object ShortNormModel extends SparkContextSupport {
 
 
     println(">>>  PHASE :: LOADING TRAIN DATA")
-    //@TODO: this is test/presentation mode
+    //@TODO: 2day vs 1 pred -> this is test/presentation mode
     //    val trainset  = ((1 to 20)++testset).map(i => "2016-01-" + "%02d".format(i)).toArray   //fullmode
     val trainset = Array("2016-01-21","2016-01-20")
     for (p <- trainset) addFiles(sc, absPath(data_dir + p))
@@ -83,13 +83,13 @@ object ShortNormModel extends SparkContextSupport {
     println(">>>  PHASE :: MODELING")
     val gapModel = drfGapModel(trainData, testData)
 
-
-    println(">>>  PHASE :: SAVE MODEL FOR FUTURE USE")
-    val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex_very_simple")
-    val ab = new AutoBuffer(omab,true)
-    gapModel.write(ab)
-    ab.close()
-    println("model saved!")
+//
+//    println(">>>  PHASE :: SAVE MODEL FOR FUTURE USE")
+//    val omab = new FileOutputStream("/opt/data/DRFGapModel_" + System.currentTimeMillis() + ".hex_very_simple")
+//    val ab = new AutoBuffer(omab,true)
+//    gapModel.write(ab)
+//    ab.close()
+//    println("model saved!")
 
 
 

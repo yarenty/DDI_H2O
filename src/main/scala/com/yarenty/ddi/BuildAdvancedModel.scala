@@ -221,18 +221,14 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._max_depth = 30
     params._nbins = 20
 
-//    params._max_depth = 50
     params._seed = 2908843745901846058L   //{ -8944624520644421113L on 30 without nothing has 2.82 }
-    //{4431458409208881489 on 30 =  2.783655299 }
-
-
-    //1075215099839523844 =>
-
     println("BUILDING:" + params.fullName)
     val drf = new DRF(params)
     drf.trainModel.get
   }
 
+
+  //{4431458409208881489 on 30 =  2.783655299 }
 
   // here version of DL which works - no regularization as is already provided
   // and batch set to 10
@@ -259,10 +255,9 @@ object BuildAdvancedModel extends SparkContextSupport {
     params._ignored_columns = Array("id", "weather")
     params._ignore_const_cols = true
 
-
     //    params._hidden = Array(200,200) //Feel Lucky   - 3.17
     //    params._hidden = Array(512) //Eagle Eye     -4.67
-        params._hidden = Array(64,64,64) //Puppy Brain   -2.64
+    params._hidden = Array(64,64,64) //Puppy Brain   -2.64
     //    params._hidden = Array(32,32,32,32,32) //Junior Chess Master
     params._mini_batch_size = 10
     params._epochs = 5.0
